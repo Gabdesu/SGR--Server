@@ -485,7 +485,7 @@ async function syncQueryToSheet(spreadsheetId, query, sheetName) {
         pool = await new sql.ConnectionPool({
             user: 'intern', 
             password: 'intern2026', 
-            server: '192.168.1.191',
+            server: '192.168.1.159',
             database: 'BCVR-SBS', 
             options: { encrypt: false, trustServerCertificate: true }
         }).connect();
