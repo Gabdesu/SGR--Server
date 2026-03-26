@@ -1,0 +1,507 @@
+const express = require('express');
+const sql = require('mssql');
+const cors = require('cors');
+require('dotenv').config();
+const { google } = require('googleapis');
+const { JWT } = require('google-auth-library');
+const creds = require('./credentials.json');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const PORT = 5000;
+// REPLACE THIS: The ID of the Google Drive folder containing your monthly reports
+const FOLDER_ID = '11WnXyYB0OBX7HuRz_fdCSHQmvdHF9yHI'; 
+
+const auth = new JWT({
+    email: creds.client_email,
+    key: creds.private_key,
+    scopes: [
+        'https://www.googleapis.com/auth/spreadsheets', 
+        'https://www.googleapis.com/auth/drive.metadata.readonly'
+    ],
+});
+
+const sheetsApi = google.sheets({ version: 'v4', auth });
+const driveApi = google.drive({ version: 'v3', auth }); // Initialize Drive API
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- HELPER: FIND SPREADSHEET BY CURRENT MONTH NAME ---
+async function getSpreadsheetIdForCurrentMonth() {
+    const monthNames = ["BCVR [SGR_SLS_MBS_JAN_2026] BCVR Masbate Branch Store | January 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_FEB_2026] BCVR Masbate Branch Store | February 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_MAR_2026] BCVR Masbate Branch Store | March 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_APR_2026] BCVR Masbate Branch Store | April 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_MAY_2026] BCVR Masbate Branch Store | May 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_JUN_2026] BCVR Masbate Branch Store | June 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_JUL_2026] BCVR Masbate Branch Store | July 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_AUG_2026] BCVR Masbate Branch Store | August 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_SEP_2026] BCVR Masbate Branch Store | September 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_OCT_2026] BCVR Masbate Branch Store | October 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_NOV_2026] BCVR Masbate Branch Store | November 2026 - Sales",
+                        "BCVR [SGR_SLS_MBS_DEC_2026] BCVR Masbate Branch Store | December 2026 - Sales"               
+    ];
+    const now = new Date();
+    const currentFileName = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+
+    try {
+        const response = await driveApi.files.list({
+            q: `'${FOLDER_ID}' in parents and name contains '${currentFileName}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+            fields: 'files(id, name)',
+        });
+
+        if (response.data.files.length === 0) {
+            console.error(`❌ No spreadsheet found matching "${currentFileName}" in folder.`);
+            return null;
+        }
+
+        const file = response.data.files[0];
+        console.log(`📂 Found active file: ${file.name} (ID: ${file.id})`);
+        return file.id;
+    } catch (err) {
+        console.error("❌ Drive Search Error:", err.message);
+        return null;
+    }
+}
+
+// --- SQL QUERY REPOSITORY ---
+const queries = {
+    'MWRS-Delivered': `
+
+-- Report for March 2026
+DECLARE @StartDate DATE = '2025-01-01';
+DECLARE @EndDate DATE = '2025-12-31';
+
+SELECT 
+    Order_Date AS [Order Date],                   -- Column A
+    Client_Name AS [Client Name],                 -- Column B
+    Client_Address AS [Client Address],           -- Column C
+    Misc_NOAdate AS [Non-official Invoice],       -- Column D
+    Misc_SalesInvoice AS [Sales Invoice],         -- Column E
+    Misc_DeliveryReceipt AS [Official Delivery Receipt], -- Column F
+    
+    -- Using Order_Status or Remarks as a placeholder for Charge Invoice if empty
+    '' AS [Charge Invoice],                       -- Column G 
+    
+    -- Adjustment Placeholders (Columns H through N)
+    0.00 AS [DM],
+    0.00 AS [MSDE],
+    0.00 AS [GM],
+    0.00 AS [LSAE],
+    0.00 AS [OSEF],
+    0.00 AS [ASME],
+    0.00 AS [REEV],
+    
+    PO_Amount AS [Total Peso Sale]                -- Column O
+FROM TBL_Orders
+WHERE (CAST(Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
+  AND (Order_Type LIKE '%Masbate Wholesale Retail Sales%' 
+       OR Order_Type LIKE '%MWRS%')               -- Matches your sheet header
+ORDER BY Order_Date ASC;`,
+
+'MWRS-Collected': `
+-- Report for March 2026
+DECLARE @StartDate DATE = '2025-01-01';
+DECLARE @EndDate DATE = '2025-01-31';
+
+SELECT 
+    Order_No AS [Order No],                    -- Column A
+    Order_Date AS [Booking Date],              -- Column B
+    Misc_PODate AS [Payment Date],             -- Column C (Mapped based on schema)
+    '' AS [Check Date],                        -- Column D (Manual entry or placeholder)
+    Client_Name AS [Entity],                   -- Column E
+    Order_Type AS [Order Details],             -- Column F
+    Misc_NOAdate AS [Non-official Invoice],    -- Column G
+    Misc_SalesInvoice AS [Sales Invoice],      -- Column H
+    Misc_DeliveryReceipt AS [Delivery Receipt],-- Column I
+    '' AS [Charge Invoice],                    -- Column J (Confirmed missing in previous error)
+    
+    -- Payment & Financial Details
+    Order_Payment_Status AS [Payment Type],    -- Column K
+    '' AS [Bank Details],                      -- Column L
+    0.00 AS [Discount],                        -- Column M
+    0.00 AS [Return],                          -- Column N
+    0.00 AS [Rebates],                         -- Column O
+    0.00 AS [Tax],                             -- Column P
+    0.00 AS [Other Charges],                   -- Column Q
+    
+    PO_Amount AS [Sales Delivered],            -- Column R
+    Payment_Amount AS [Net Collected]          -- Column S
+FROM TBL_Orders
+WHERE (CAST(Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
+  AND (Order_Type LIKE '%Masbate%' OR Order_Type LIKE '%MWRS%')
+ORDER BY Order_Date ASC`,
+
+
+'MFGS-Booking': `
+-- Reports
+DECLARE @StartDate DATE = '2025-01-01';
+DECLARE @EndDate DATE = '2025-12-31';
+
+SELECT 
+    O.Order_Date AS [Booking Date],              -- Column A
+    
+    -- Categorizing based on your previously identified IDs
+    CASE 
+        WHEN I.Catg_ID IN (392979, 564572, 91602, 101990, 81593) THEN 'MEDICINES'
+        WHEN I.Catg_ID IN (272586, 322690, 202276, 91931, 101946, 91901, 493490, 91936, 91908) THEN 'SUPPLIES'
+        ELSE 'OTHER'
+    END AS [Sales Category],                     -- Column B
+    
+    O.Client_Name AS [Entity],                   -- Column C
+    O.Client_Address AS [End User],               -- Column D (Often used as End User in your sheet)
+    O.Order_Type AS [PO Details],                -- Column E
+    
+    -- Financials
+    O.PO_Amount AS [PO Amount],                  -- Column F
+    O.Payment_Amount AS [Total Delivered]        -- Column G
+    
+FROM TBL_Orders O
+INNER JOIN TBL_Orders_Detail OD ON O.Order_No = OD.Order_No
+INNER JOIN TBL_Category_Item_File I ON OD.Item_ID = I.Item_ID
+WHERE (CAST(O.Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
+  -- Filtering specifically for SFGS (Government Sales)
+  AND (O.Order_Type LIKE '%Masbate Field Government%' OR O.Order_Type LIKE '%MFGS%')
+ORDER BY O.Order_Date ASC`,
+
+
+'MFGS-Delivered': `
+
+-- Report for March 2026
+DECLARE @StartDate DATE = '2025-01-01';
+DECLARE @EndDate DATE = '2025-12-31';
+
+SELECT 
+    Order_Date AS [Order Date],                   -- Column A
+    Client_Name AS [Client Name],                 -- Column B
+    Client_Address AS [Client Address],           -- Column C
+    Misc_NOAdate AS [Non-official Invoice],       -- Column D
+    Misc_SalesInvoice AS [Sales Invoice],         -- Column E
+    Misc_DeliveryReceipt AS [Official Delivery Receipt], -- Column F
+    '' AS [Charge Invoice],                       -- Column G (Manual Entry)
+    
+    -- Adjustment Placeholders (Columns H through N)
+    0.00 AS [DM],
+    0.00 AS [MSDE],
+    0.00 AS [GM],
+    0.00 AS [LSAE],
+    0.00 AS [OSEF],
+    0.00 AS [ASME],
+    0.00 AS [REEV],
+    
+    PO_Amount AS [Total Peso Sale]                -- Column O
+FROM TBL_Orders
+WHERE (CAST(Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
+  -- Specific filter for Government Sales
+  AND (Order_Type LIKE '%Masbate Field Government%' OR Order_Type LIKE '%MFGS%')
+ORDER BY Order_Date ASC`,
+
+
+'MFGS-Collected': `
+
+-- Report for March 2026
+DECLARE @StartDate DATE = '2025-01-01';
+DECLARE @EndDate DATE = '2025-12-31';
+
+SELECT 
+    O.Order_No AS [Order No],                    
+    O.Order_Date AS [Booking Date],              
+    O.Misc_PODate AS [Payment Date],             
+    '' AS [Check Date],                          
+    O.Client_Name AS [Procuring Entity],         
+    O.Order_Type AS [Order Details],             
+    -- Fixed: Using CAST to ensure the concatenation treats everything as text
+    'Order Slip#' + CAST(O.Order_No AS VARCHAR(20)) AS [Non-official Invoice], 
+    O.Misc_SalesInvoice AS [Sales Invoice],      
+    O.Misc_DeliveryReceipt AS [Official Delivery Receipt],
+    '' AS [Charge Invoice],                      
+    
+    -- Document Tracking
+    O.Misc_RFQDate AS [RFQ Date],                
+    O.Misc_PQDate AS [PQ Date],                  
+    O.Misc_NOAdate AS [NOA Date],                
+    O.Misc_NTPdate AS [NTP Date],                
+    O.Misc_PODate AS [PO Date],                  
+    
+    -- Financials
+    O.Order_Payment_Status AS [Payment Type],    
+    0.00 AS [Tax Amount],                        
+    O.PO_Amount AS [Stocks Delivered],           
+    O.Payment_Amount AS [Net Collected]          
+
+FROM TBL_Orders O
+WHERE (CAST(O.Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
+  AND (O.Order_Type LIKE '%Masbate Field Government%' OR O.Order_Type LIKE '%MFGS%')
+ORDER BY O.Order_Date ASC`,
+
+
+'Top 30': `
+        DECLARE @StartDate DATE = '2025-03-01';
+        DECLARE @EndDate DATE = '2025-03-31';
+
+        -- 1. TOP 30 BOOKING (Columns B, C, D)
+        SELECT TOP 30 'MWRS' AS [BOSC], Client_Name AS [Entity], SUM(ISNULL(PO_Amount, 0)) AS [Total PO]
+        FROM TBL_Orders WHERE (CAST(Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
+        AND (Order_Type LIKE '%Masbate%' OR Order_Type LIKE '%MWRS%')
+        GROUP BY Client_Name ORDER BY SUM(ISNULL(PO_Amount, 0)) DESC;
+
+        -- 2. TOP 30 DELIVERED (Columns H, I, J)
+        SELECT TOP 30 'MWRS' AS [BOSC], Client_Name AS [Entity], SUM(CASE WHEN Misc_DeliveryReceipt IS NOT NULL THEN ISNULL(PO_Amount, 0) ELSE 0 END) AS [Total Delivered]
+        FROM TBL_Orders WHERE (CAST(Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
+        AND (Order_Type LIKE '%Masbate%' OR Order_Type LIKE '%MWRS%')
+        GROUP BY Client_Name ORDER BY SUM(ISNULL(PO_Amount, 0)) DESC;
+
+        -- 3. TOP 30 COLLECTED (Columns M, N, O)
+        SELECT TOP 30 'MWRS' AS [BOSC], Client_Name AS [Entity], SUM(ISNULL(Payment_Amount, 0)) AS [Total Collected]
+        FROM TBL_Orders WHERE (CAST(Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
+        AND (Order_Type LIKE '%Masbate%' OR Order_Type LIKE '%MWRS%')
+        GROUP BY Client_Name ORDER BY SUM(ISNULL(PO_Amount, 0)) DESC;`,
+
+
+'Top AR': `
+DECLARE @StartDate DATE = '2025-01-01';
+DECLARE @EndDate DATE = '2025-12-31';
+
+SELECT TOP 30
+    '' AS [#],              -- Empty Column A Placeholder
+    'MWRS' AS [BOSC],       -- Column B
+    Client_Name AS [Entity], -- Column C
+    SUM(ISNULL(PO_Amount, 0)) - SUM(ISNULL(Payment_Amount, 0)) AS [Total Balance] -- Column D
+FROM TBL_Orders
+WHERE (CAST(Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
+  AND (Order_Type LIKE '%Masbate%' OR Order_Type LIKE '%MWRS%')
+GROUP BY Client_Name
+HAVING SUM(ISNULL(PO_Amount, 0)) - SUM(ISNULL(Payment_Amount, 0)) > 0
+ORDER BY [Total Balance] DESC`,
+
+
+'Top Inactive': `
+DECLARE @CurrentMonthStart DATE = '2026-03-01';
+
+SELECT TOP 30
+    '' AS [#],              -- Empty Column A Placeholder
+    CASE 
+        WHEN Order_Type LIKE '%Government%' OR Order_Type LIKE '%MFGS%' THEN 'MFGS'
+        ELSE 'MWRS'
+    END AS [BOSC],          -- Column B
+    Client_Name AS [Entity], -- Column C
+    SUM(ISNULL(PO_Amount, 0)) AS [Total Consumption] -- Column D
+FROM TBL_Orders
+WHERE (Order_Type LIKE '%Masbate%' OR Order_Type LIKE '%MWRS%' OR Order_Type LIKE '%MFGS%')
+GROUP BY Client_Name, Order_Type
+HAVING MAX(CAST(Order_Date AS DATE)) < @CurrentMonthStart
+ORDER BY [Total Consumption] DESC`,
+
+
+'New Clients': `
+    DECLARE @MonthStart DATE = '2025-03-01';
+    DECLARE @MonthEnd DATE = '2025-03-31';
+
+    SELECT 
+        '' AS [#], -- Column A Placeholder
+        FORMAT(MIN(O.Order_Date), 'yyyy-MM-dd') AS [Date Added], -- Column B
+        O.Client_Name AS [Name],                                -- Column C
+        O.Client_Address AS [Address],                          -- Column D
+        O.Order_Type AS [Type]                                  -- Column E
+    FROM TBL_Orders O
+    WHERE (O.Order_Type LIKE '%Masbate%' OR O.Order_Type LIKE '%MWRS%' OR O.Order_Type LIKE '%MFGS%')
+    GROUP BY O.Client_Name, O.Client_Address, O.Order_Type
+    HAVING MIN(CAST(O.Order_Date AS DATE)) BETWEEN @MonthStart AND @MonthEnd
+    ORDER BY [Date Added] ASC`,
+
+'Active Clients Update Audit': `
+    DECLARE @YearAgo DATE = '2025-01-01';
+
+    SELECT 
+        '' AS [#], -- Column A Placeholder
+        FORMAT(MIN(Order_Date), 'yyyy-MM-dd') AS [Date Recorded], -- Column B
+        CASE 
+            WHEN Order_Type LIKE '%Government%' OR Order_Type LIKE '%MFGS%' THEN 'MFGS'
+            ELSE 'MWRS'
+        END AS [Sales Category],                                  -- Column C
+        Client_Name AS [Entity],                                   -- Column D
+        FORMAT(MAX(Order_Date), 'yyyy-MM-dd') AS [Most Recent Order Date], -- Column E
+        COUNT(Order_No) AS [No. of Transactions]                   -- Column F
+    FROM TBL_Orders
+    WHERE (Order_Type LIKE '%Masbate%' OR Order_Type LIKE '%MWRS%' OR Order_Type LIKE '%MFGS%')
+    GROUP BY Client_Name, Order_Type
+    HAVING MAX(Order_Date) >= @YearAgo
+    ORDER BY [No. of Transactions] DESC`,
+
+
+
+'New Client Contacts': `
+    DECLARE @MonthStart DATE = '2025-01-01';
+    DECLARE @MonthEnd DATE = '2025-12-31';
+
+    SELECT 
+        '' AS [#], -- Column A Placeholder
+        CASE WHEN Order_Type LIKE '%MFGS%' THEN 'MFGS' ELSE 'MWRS' END AS [SalesCategory], -- Column B
+        Client_Name AS [Entity], -- Column C
+        '' AS [Contact Person],  -- Column D
+        '' AS [Position],        -- Column E
+        '' AS [Department],      -- Column F
+        '' AS [Birthday],        -- Column G
+        '' AS [Contact Number],  -- Column H
+        '' AS [Email Address],   -- Column I
+        'New Client March 2026' AS [Remarks] -- Column J
+    FROM TBL_Orders
+    GROUP BY Client_Name, Order_Type
+    HAVING MIN(CAST(Order_Date AS DATE)) BETWEEN @MonthStart AND @MonthEnd`,
+
+
+'Canvass Details': `
+
+DECLARE @StartDate DATE = '2025-03-01';
+DECLARE @EndDate DATE = '2025-03-31';
+
+SELECT 
+    O.Order_No AS [Canvass No],                     -- Col A
+    CAST(O.Order_Date AS DATE) AS [Plot Date],      -- Col B
+    O.Client_Name AS [Canvass Name],                -- Col C
+    CASE 
+        WHEN O.Order_Type LIKE '%MFGS%' THEN 'MFGS' 
+        ELSE 'MWRS' 
+    END AS [Sales Category],                        -- Col D
+    '' AS [End User],                               -- Col E (Manual)
+    'Masbate Staff' AS [Canvasser Name],           -- Col F
+    '' AS [Contact],                                -- Col G (Manual)
+    '' AS [Designation],                            -- Col H (Manual)
+    'YES' AS [Approved?],                           -- Col I
+    'WON' AS [Result],                              -- Col J
+    O.PO_Amount AS [ABC Total],                     -- Col K
+    O.PO_Amount AS [Canvass Total],                 -- Col L
+    'System' AS [Encoder]                           -- Col M
+FROM TBL_Orders O
+WHERE CAST(O.Order_Date AS DATE) BETWEEN @StartDate AND @EndDate
+  AND (O.Order_Type LIKE '%Masbate%' OR O.Order_Type LIKE '%MWRS%' OR O.Order_Type LIKE '%MFGS%')
+ORDER BY O.Order_Date ASC`,
+
+
+'Ordering Kiosk Details': `
+
+DECLARE @StartDate DATE = '2025-01-01';
+DECLARE @EndDate DATE = '2025-12-31';
+
+SELECT 
+    CASE 
+        WHEN O.Order_Type LIKE '%MFGS%' THEN 'MFGS' 
+        ELSE 'MWRS' 
+    END AS [Sales Category],                        -- Col A
+    O.Order_No AS [Order No],                       -- Col B
+    CAST(O.Order_Date AS DATE) AS [Booking Date],   -- Col C
+    CAST(O.Order_Date AS DATE) AS [Order Date],     -- Col D
+    O.Client_Name AS [Entity],                      -- Col E
+    O.Client_Address AS [Address],                  -- Col F
+    '' AS [End User/Requestor],                     -- Col G (Manual)
+    'System_User' AS [Encoder],                     -- Col H
+    '' AS [Picker],                                 -- Col I (Manual)
+    '' AS [Checker],                                -- Col J (Manual)
+    '' AS [Packer],                                 -- Col K (Manual)
+    O.Order_No AS [Canvass No./SRF No.],            -- Col L
+    O.Order_Type AS [PO Details / Order Details],   -- Col M
+    O.PO_Amount AS [PO Amount / Order Total]        -- Col N
+FROM TBL_Orders O
+WHERE CAST(O.Order_Date AS DATE) BETWEEN @StartDate AND @EndDate
+  AND (O.Order_Type LIKE '%Masbate%' OR O.Order_Type LIKE '%MWRS%' OR O.Order_Type LIKE '%MFGS%')
+ORDER BY O.Order_No ASC`
+};
+
+async function syncQueryToSheet(spreadsheetId, query, sheetName) {
+    let pool;
+    try {
+        pool = await new sql.ConnectionPool({
+            user: 'intern', 
+            password: 'intern2026', 
+            server: '192.168.1.191',
+            database: 'BCVR-MBS', 
+            options: { encrypt: false, trustServerCertificate: true }
+        }).connect();
+
+        const result = await pool.request().query(query);
+        
+        // --- LOGIC FOR TOP 30 (TRIPLE COLUMN SYNC) ---
+        if (sheetName === 'Top 30') {
+            const startRow = 6;
+            const sets = result.recordsets; // Get all 3 SELECT results
+
+            await sheetsApi.spreadsheets.values.batchClear({
+                spreadsheetId,
+                requestBody: { 
+                    ranges: [
+                        `'${sheetName}'!B${startRow}:D50`, 
+                        `'${sheetName}'!H${startRow}:J50`, 
+                        `'${sheetName}'!M${startRow}:O50`
+                    ] 
+                }
+            });
+
+            const batchData = [];
+            if (sets[0]) batchData.push({ range: `'${sheetName}'!B${startRow}`, values: sets[0].map(r => Object.values(r)) });
+            if (sets[1]) batchData.push({ range: `'${sheetName}'!H${startRow}`, values: sets[1].map(r => Object.values(r)) });
+            if (sets[2]) batchData.push({ range: `'${sheetName}'!M${startRow}`, values: sets[2].map(r => Object.values(r)) });
+
+            if (batchData.length > 0) {
+                await sheetsApi.spreadsheets.values.batchUpdate({
+                    spreadsheetId,
+                    requestBody: { data: batchData, valueInputOption: 'RAW' }
+                });
+                console.log(`✅ [${sheetName}] Triple-column sync at Row ${startRow}.`);
+            }
+            return;
+        }
+
+        // --- LOGIC FOR ALL OTHER SHEETS ---
+        const rows = result.recordset;
+        const startAtRow6 = [
+            'Out of Stocks', 'Expired', 'Near Expiry', 
+            'Top Peso Sold (Meds)', 'Top Peso Sold (Supplies)', 'Top 30',
+            'Top AR', 'Top Inactive',
+            'New Client Contacts', 'Canvass Details', 'Ordering Kiosk Details'
+        ];
+
+        const startRow = (sheetName === 'High Peso Value') ? 5 : (startAtRow6.includes(sheetName) ? 6 : 5);
+
+        const dataRange = `'${sheetName}'!A${startRow}:Z1000`; 
+        await sheetsApi.spreadsheets.values.clear({ spreadsheetId, range: dataRange });
+
+        if (rows && rows.length > 0) {
+            const values = rows.map(r => Object.values(r));
+            await sheetsApi.spreadsheets.values.update({
+                spreadsheetId,
+                range: `'${sheetName}'!A${startRow}`,
+                valueInputOption: 'RAW',
+                requestBody: { values },
+            });
+            console.log(`✅ [${sheetName}] Data synced at Row ${startRow}.`);
+        }
+    } catch (err) {
+        console.error(`❌ [${sheetName}] Error:`, err.message);
+    } finally {
+        if (pool) await pool.close();
+    }
+}
+
+async function runSyncCycle() {
+    console.log(`\n🚀 STARTING SYNC CYCLE: ${new Date().toLocaleString()}`);
+    
+    // Dynamically find the spreadsheet for the current month
+    const currentSpreadsheetId = await getSpreadsheetIdForCurrentMonth();
+
+    if (!currentSpreadsheetId) {
+        console.log("⚠️ Sync Cycle Aborted: Could not find target spreadsheet in folder.");
+        return;
+    }
+
+    for (const [tabName, sqlQuery] of Object.entries(queries)) {
+        await syncQueryToSheet(currentSpreadsheetId, sqlQuery, tabName);
+        await sleep(3000); 
+    }
+    console.log(`\n✨ SYNC CYCLE FINISHED SUCCESSFULLY.\n`);
+}
+
+app.listen(PORT, () => {
+    console.log(`🚀 Server listening on port ${PORT}`);
+    runSyncCycle(); 
+});
