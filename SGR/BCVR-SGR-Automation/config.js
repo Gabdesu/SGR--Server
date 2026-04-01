@@ -10,7 +10,7 @@ const creds = require("./credentials.json");
 
 const DATE = {
   // ── Primary range (used by most tabs) ─────────────────────
-  START: "2026-02-01", // YYYY-MM-DD
+  START: "2026-03-01", // YYYY-MM-DD
   END: "2026-03-31", // YYYY-MM-DD
 
   // ── Year-only filter (used by OPEX Monthly tab) ────────────
