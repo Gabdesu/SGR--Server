@@ -31,9 +31,9 @@ const BRANCHES = {
         label:      'Distribution Warehouse (DW)',
         dbName:     'BCVR-DW',
         branchCode: 'DW',
-        acnFolder:  '',
-        prdFolder:  '',
-        slsFolder:  '',
+        acnFolder:  '12uwjH14ASjw4NOjQGrkMkTiZlHiZk-5t',
+        prdFolder:  '1Z0UlsIvxN9xo-NKcCD9kZ01YOFe7bwIf',
+        slsFolder:  '1pBKGCjeRwocP5nmfdYXhv7g2AvEV3a0A',
     },
     distribution_display_store: {
         label:      'Distribution Display Store (DDS)',
