@@ -10,7 +10,7 @@ const BRANCH_META = {
     SBS: { prefix: 'SGR_ACN_SBS', label: 'Sorsogon Branch Store' },
     MBS: { prefix: 'SGR_ACN_MBS', label: 'Masbate Branch Store'  },
     IBS: { prefix: 'SGR_ACN_IBS', label: 'Iriga Branch Store'    },
-    DW:  { prefix: 'SGR_PRD_DW',  label: 'Distribution Warehouse'},
+    DW:  { prefix: 'SGR_ACN_DW',  label: 'Distribution Warehouse'},
 };
 
 const MONTH_LABELS = [
@@ -52,66 +52,90 @@ async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
 // --- SQL QUERY REPOSITORY ---
 function buildQueries(dbName) {
 const queries = {
-    'ST: SBS->DW': `
+    'ST: DW->DDS': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT [Order Date], [Client Name], [Client Address], [Non-official Invoice], [DM], [MSDE], [GM], [LSAE], [OSEF], [ASME], [REEV], [Total Peso Sale]
-        FROM (
-            SELECT 1 AS SortOrder,
-                CAST(ISNULL(CONVERT(VARCHAR(10), O.Order_Date, 120), '') AS NVARCHAR(50)) AS [Order Date],
-                CAST(ISNULL(O.Client_Name, '') AS NVARCHAR(255)) AS [Client Name],
-                CAST(ISNULL(O.Client_Address, '') AS NVARCHAR(255)) AS [Client Address],
-                CAST('STF#' + CAST(O.Order_No AS VARCHAR(20)) AS NVARCHAR(255)) AS [Non-official Invoice],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 1 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [DM],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 2 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [MSDE],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 3 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [GM],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 4 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [LSAE],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 5 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [OSEF],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 6 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [ASME],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 7 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [REEV],
-                CAST(FORMAT(ISNULL(SUM(OD.TOTAL_COST), 0), 'N2') AS NVARCHAR(50)) AS [Total Peso Sale]
-            FROM dbo.TBL_Orders O
-            INNER JOIN dbo.TBL_Orders_Detail OD ON O.Order_No = OD.Order_No
-            LEFT JOIN dbo.TBL_Category_Item_File CI ON OD.Item_ID = CI.Item_ID
-            LEFT JOIN dbo.TBL_Category_File CF ON CI.Catg_ID = CF.Catg_ID
-            LEFT JOIN dbo.TBL_Group G ON CF.Group_ID = G.Group_ID
-            WHERE O.Order_Type LIKE 'TS - Transfer Sales%'
-              AND O.Client_Name NOT LIKE '%Distribution%'
-              AND O.Client_Name NOT LIKE '%BCVR-DW%'
-              AND O.Order_Date BETWEEN @StartDate AND @EndDate
-            GROUP BY O.Order_No, O.Order_Date, O.Client_Name, O.Client_Address
-        ) AS ST_Report
-        ORDER BY [Order Date] ASC`,
+        
+        Query here ***
+        `,
 
-    'RT: DW->SBS': `
+    'ST: DW->PHSSN': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT [Order Date], [Client Name], [Client Address], [Non-official Invoice], [DM], [MSDE], [GM], [LSAE], [OSEF], [ASME], [REEV], [Total Peso Sale]
-        FROM (
-            SELECT 1 AS SortOrder,
-                CAST(ISNULL(CONVERT(VARCHAR(10), O.Order_Date, 120), '') AS NVARCHAR(50)) AS [Order Date],
-                CAST(ISNULL(O.Client_Name, '') AS NVARCHAR(255)) AS [Client Name],
-                CAST(ISNULL(O.Client_Address, '') AS NVARCHAR(255)) AS [Client Address],
-                CAST('STF#' + CAST(O.Order_No AS VARCHAR(20)) AS NVARCHAR(255)) AS [Non-official Invoice],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 1 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [DM],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 2 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [MSDE],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 3 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [GM],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 4 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [LSAE],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 5 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [OSEF],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 6 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [ASME],
-                CAST(FORMAT(ISNULL(SUM(CASE WHEN G.Group_ID = 7 THEN OD.TOTAL_COST ELSE 0 END), 0), 'N2') AS NVARCHAR(50)) AS [REEV],
-                CAST(FORMAT(ISNULL(SUM(OD.TOTAL_COST), 0), 'N2') AS NVARCHAR(50)) AS [Total Peso Sale]
-            FROM dbo.TBL_Orders O
-            INNER JOIN dbo.TBL_Orders_Detail OD ON O.Order_No = OD.Order_No
-            LEFT JOIN dbo.TBL_Category_Item_File CI ON OD.Item_ID = CI.Item_ID
-            LEFT JOIN dbo.TBL_Category_File CF ON CI.Catg_ID = CF.Catg_ID
-            LEFT JOIN dbo.TBL_Group G ON CF.Group_ID = G.Group_ID
-            WHERE O.Order_Type LIKE 'TS - Transfer Sales%'
-              AND (O.Client_Name LIKE '%Distribution%' OR O.Client_Name LIKE '%BCVR-DW%')
-              AND O.Order_Date BETWEEN @StartDate AND @EndDate
-            GROUP BY O.Order_No, O.Order_Date, O.Client_Name, O.Client_Address
-        ) AS RT_Report
-        ORDER BY [Order Date] ASC`,
+        
+        Query here ***
+        `,
+
+    'ST: DW->PHSSI': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+    
+    'ST: DW->IBS': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'ST: DW->MBS': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'ST: DW->SBS': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+    
+    'RT: DDS->DW': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+    
+    'RT: PHSSN->DW': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'RT: PHSSI->DW': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+    
+    'RT: IBS->DW': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'RT: MBS->DW': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'RT: SBS->DW': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+        
 
     'Sales Invoice - Govt.': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
@@ -240,6 +264,21 @@ const queries = {
           AND OPEX_Category NOT LIKE '%Cost Of Goods%'
         ORDER BY [Date of Payment] ASC`,
 
+    
+    'Cost of Goods 1': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'Cost of Goods 2': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
     'OPEX Monthly': `
         SELECT 
             OPEX_Category,
@@ -259,6 +298,56 @@ const queries = {
         WHERE YEAR(Date_Payment_Check) = ${DATE.sql.year}
           AND OPEX_Category NOT IN ('Cost Of Goods 1', 'Cost Of Goods 2')
         GROUP BY OPEX_Category`,
+
+    'Supplier Received': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'AP': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'AP - Debit (COGS1)': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'AP - Debit (COGS2)': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'AP - Overdue': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'AP - Audit': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    'Check Transmittal': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
 
     'Disbursement': `
         DECLARE @Date_From DateTime = '${DATE.sql.datetimeStart}';
@@ -306,6 +395,29 @@ const queries = {
         WHERE deposit_date >= '${DATE.sql.start}'
           AND deposit_date <  '${DATE.sql.end}'
         ORDER BY deposit_date ASC`,
+
+
+     'New Supplier': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+     'Procurement Audit': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+     'Supplier PO Audit': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
 
     'OPEX: SOP/Cashout': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';

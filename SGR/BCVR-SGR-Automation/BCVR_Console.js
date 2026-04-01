@@ -27,15 +27,15 @@ const BRANCHES = {
         prdFolder:  '',
         slsFolder:  '',
     },
-    distribution_warehouse: {
+    dw: {
         label:      'Distribution Warehouse (DW)',
-        dbName:     'BCVR-DW',
+        dbName:     'BCVR-SBS',
         branchCode: 'DW',
         acnFolder:  '12uwjH14ASjw4NOjQGrkMkTiZlHiZk-5t',
         prdFolder:  '1Z0UlsIvxN9xo-NKcCD9kZ01YOFe7bwIf',
         slsFolder:  '1pBKGCjeRwocP5nmfdYXhv7g2AvEV3a0A',
     },
-    distribution_display_store: {
+    dds: {
         label:      'Distribution Display Store (DDS)',
         dbName:     'BCVR-DDS',
         branchCode: 'DDS',
@@ -43,7 +43,7 @@ const BRANCHES = {
         prdFolder:  '',
         slsFolder:  '',
     },
-    pharmacy_sale_store_naga: {
+    phssn: {
         label:      'Pharmacy Sale Store Naga (PHSSN)',
         dbName:     'BCVR-PHSSN',
         branchCode: 'PHSSN',
@@ -59,7 +59,7 @@ const BRANCHES = {
         prdFolder:  '1NsXWJvZd_jSuyExdY-LyZ4Xxcb3W4o0o',
         slsFolder:  '1AFXHjwtQPU0T4fiyb5pzdc_9iZ4FM3Hp',
     },
-    pharmacy_sale_store_iriga: {
+    phssi: {
         label:      'Pharmacy Sale Store Iriga (PHSSI)',
         dbName:     'BCVR-PHSSI',
         branchCode: 'PHSSI',

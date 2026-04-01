@@ -297,6 +297,11 @@ const queries = {
                             91901, 493490, 91936, 91908)
         ORDER BY 1 ASC, I.Item_Org_Price DESC`,
 
+    'Product Received Details': `
+        
+    //query to be added here
+    `,
+
     'Lacking Served': `
     DECLARE @StartDate DATE = '${DATE.sql.start}';
     DECLARE @EndDate   DATE = '${DATE.sql.end}';
@@ -318,6 +323,26 @@ const queries = {
     WHERE OOS.OS_OrderType LIKE '%Sorsogon%'
       AND OOS.OS_Date BETWEEN @StartDate AND @EndDate
     ORDER BY OOS.OS_Date DESC`,
+
+    'Product Received Details': `
+        
+    //query to be added here
+    `,
+
+    'Product Received Details': `
+        
+    //query to be added here
+    `,
+
+    'Product Received Details': `
+        
+    //query to be added here
+    `,
+
+    'Product Received Details': `
+        
+    //query to be added here
+    `,
 };
 
 // --- FORMATTING HELPERS ---

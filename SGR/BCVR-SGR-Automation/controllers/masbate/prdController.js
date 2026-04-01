@@ -22,9 +22,12 @@ const MONTH_LABELS = [
 // --- HELPER: FIND SPREADSHEET BY CURRENT MONTH NAME ---
 async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
     const meta  = BRANCH_META[branchCode] || BRANCH_META['MBS'];
-    const now   = new Date();
-    const year  = now.getFullYear();
-    const [shortMon, longMon] = MONTH_LABELS[now.getMonth()];
+    
+        // Target LAST month (mirrors config.js buildLastMonthRange logic)
+    const year  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1; // 0-indexed for MONTH_LABELS
+    const [shortMon, longMon] = MONTH_LABELS[month];
+
     const currentFileName = `BCVR [${meta.prefix}_${shortMon}_${year}] BCVR ${meta.label} | ${longMon} ${year} - \u200BProducts`;
     console.log(`🔎 [PRD] Searching Drive folder for: "${currentFileName}" (Branch: ${branchCode})`);
 
@@ -265,12 +268,12 @@ async function syncQueryToSheet(pool, spreadsheetId, query, sheetName) {
             });
 
             // Fixed header row for this custom layout (Type column is split into two panels)
-            const HPV_HEADER = ['', 'Product', 'Qty', 'Capital', 'D', 'Retail'];
+            const HPV_HEADER = ['', 'Product Name', 'Qty', 'Capital', 'D', 'Retail'];
 
             // Custom row mapper: drop Type, prepend empty # column
             const mapRow = (r) => [
                 '',
-                r.Product,
+                r['Product Name'],
                 r.Qty,
                 formatCell('Price', r.Capital),
                 formatCell('Price', r.Distribution),

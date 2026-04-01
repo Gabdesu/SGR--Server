@@ -51,131 +51,100 @@ async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
 
 // --- SQL QUERY REPOSITORY ---
 const queries = {
-    'SWRS-Delivered': `
+    'DFGS1-Booking': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT 
-            Order_Date              AS [Order Date],
-            Client_Name             AS [Client Name],
-            Client_Address          AS [Client Address],
-            Misc_NOAdate            AS [Non-official Invoice],
-            Misc_SalesInvoice       AS [Sales Invoice],
-            Misc_DeliveryReceipt    AS [Official Delivery Receipt],
-            ''                      AS [Charge Invoice],
-            0.00                    AS [DM],
-            0.00                    AS [MSDE],
-            0.00                    AS [GM],
-            0.00                    AS [LSAE],
-            0.00                    AS [OSEF],
-            0.00                    AS [ASME],
-            0.00                    AS [REEV],
-            PO_Amount               AS [Total Peso Sale]
-        FROM TBL_Orders
-        WHERE (CAST(Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
-          AND (Order_Type LIKE '%Sorsogon Wholesale Retail Sales%' OR Order_Type LIKE '%SWRS%')
-        ORDER BY Order_Date ASC`,
+            
+        //Query here*****
+        `,
 
-    'SWRS-Collected': `
+    'DFGS2-Booking': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT 
-            Order_No                AS [Order No],
-            Order_Date              AS [Booking Date],
-            Misc_PODate             AS [Payment Date],
-            ''                      AS [Check Date],
-            Client_Name             AS [Entity],
-            Order_Type              AS [Order Details],
-            Misc_NOAdate            AS [Non-official Invoice],
-            Misc_SalesInvoice       AS [Sales Invoice],
-            Misc_DeliveryReceipt    AS [Delivery Receipt],
-            ''                      AS [Charge Invoice],
-            Order_Payment_Status    AS [Payment Type],
-            ''                      AS [Bank Details],
-            0.00                    AS [Discount],
-            0.00                    AS [Return],
-            0.00                    AS [Rebates],
-            0.00                    AS [Tax],
-            0.00                    AS [Other Charges],
-            PO_Amount               AS [Sales Delivered],
-            Payment_Amount          AS [Net Collected]
-        FROM TBL_Orders
-        WHERE (CAST(Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
-          AND (Order_Type LIKE '%Sorsogon%' OR Order_Type LIKE '%SWRS%')
-        ORDER BY Order_Date ASC`,
+        
+        
+        //Query here*****
+        
+        `,
 
-    'SFGS-Booking': `
+    'GPFS-Booking': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT 
-            O.Order_Date AS [Booking Date],
-            CASE 
-                WHEN I.Catg_ID IN (392979, 564572, 91602, 101990, 81593) THEN 'MEDICINES'
-                WHEN I.Catg_ID IN (272586, 322690, 202276, 91931, 101946, 91901, 493490, 91936, 91908) THEN 'SUPPLIES'
-                ELSE 'OTHER'
-            END          AS [Sales Category],
-            O.Client_Name    AS [Entity],
-            O.Client_Address AS [End User],
-            O.Order_Type     AS [PO Details],
-            O.PO_Amount      AS [PO Amount],
-            O.Payment_Amount AS [Total Delivered]
-        FROM TBL_Orders O
-        INNER JOIN TBL_Orders_Detail OD ON O.Order_No = OD.Order_No
-        INNER JOIN TBL_Category_Item_File I ON OD.Item_ID = I.Item_ID
-        WHERE (CAST(O.Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
-          AND (O.Order_Type LIKE '%Sorsogon Field Government%' OR O.Order_Type LIKE '%SFGS%')
-        ORDER BY O.Order_Date ASC`,
+        
+        
+        //Query here*****
+        `,
 
-    'SFGS-Delivered': `
+    'DFS1-Delivered': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT 
-            Order_Date           AS [Order Date],
-            Client_Name          AS [Client Name],
-            Client_Address       AS [Client Address],
-            Misc_NOAdate         AS [Non-official Invoice],
-            Misc_SalesInvoice    AS [Sales Invoice],
-            Misc_DeliveryReceipt AS [Official Delivery Receipt],
-            ''                   AS [Charge Invoice],
-            0.00                 AS [DM],
-            0.00                 AS [MSDE],
-            0.00                 AS [GM],
-            0.00                 AS [LSAE],
-            0.00                 AS [OSEF],
-            0.00                 AS [ASME],
-            0.00                 AS [REEV],
-            PO_Amount            AS [Total Peso Sale]
-        FROM TBL_Orders
-        WHERE (CAST(Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
-          AND (Order_Type LIKE '%Sorsogon Field Government%' OR Order_Type LIKE '%SFGS%')
-        ORDER BY Order_Date ASC`,
 
-    'SFGS-Collected': `
+        //Query here*****
+        `,
+
+    'DFS2-Delivered': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT 
-            O.Order_No              AS [Order No],
-            O.Order_Date            AS [Booking Date],
-            O.Misc_PODate           AS [Payment Date],
-            ''                      AS [Check Date],
-            O.Client_Name           AS [Procuring Entity],
-            O.Order_Type            AS [Order Details],
-            'Order Slip#' + CAST(O.Order_No AS VARCHAR(20)) AS [Non-official Invoice],
-            O.Misc_SalesInvoice     AS [Sales Invoice],
-            O.Misc_DeliveryReceipt  AS [Official Delivery Receipt],
-            ''                      AS [Charge Invoice],
-            O.Misc_RFQDate          AS [RFQ Date],
-            O.Misc_PQDate           AS [PQ Date],
-            O.Misc_NOAdate          AS [NOA Date],
-            O.Misc_NTPdate          AS [NTP Date],
-            O.Misc_PODate           AS [PO Date],
-            O.Order_Payment_Status  AS [Payment Type],
-            0.00                    AS [Tax Amount],
-            O.PO_Amount             AS [Stocks Delivered],
-            O.Payment_Amount        AS [Net Collected]
-        FROM TBL_Orders O
-        WHERE (CAST(O.Order_Date AS DATE) BETWEEN @StartDate AND @EndDate)
-          AND (O.Order_Type LIKE '%Sorsogon Field Government%' OR O.Order_Type LIKE '%SFGS%')
-        ORDER BY O.Order_Date ASC`,
+        
+        //Query here*****
+        `,
+
+    'DFGS1-Delivered': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        //Query here*****
+        `,
+
+        'DFGS2-Delivered': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        //Query here*****
+        `,
+
+        'GPFS-Delivered': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        //Query here*****
+        `,
+
+        'DFS1-Collected': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        //Query here*****
+        `,
+
+        'DFGS1-Collected': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        //Query here*****
+        `,
+
+        'DFS2-Collected': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        //Query here*****
+        `,
+
+        'DFGS2-Collected': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        //Query here*****
+        `,
+
+        'GPFS-Collected': `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        //Query here*****
+        `,
 
     'Top 30': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';

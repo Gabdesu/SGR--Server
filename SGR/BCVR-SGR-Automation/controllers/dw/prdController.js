@@ -365,12 +365,12 @@ async function syncQueryToSheet(pool, spreadsheetId, query, sheetName) {
             });
 
             // ✅ Headers always defined outside if/else — always written regardless of records
-            const hpvHeaders = ['', 'Product', 'Qty', 'Capital', 'Distribution', 'Retail'];
+            const hpvHeaders = ['', 'Product Name', 'Qty', 'Capital', 'Distribution', 'Retail'];
 
             if (rows && rows.length > 0) {
                 const mapRow = (r) => [
                     '',
-                    r.Product,
+                    r['Product Name'],
                     r.Qty,
                     formatCell('Price', r.Capital),
                     formatCell('Price', r.Distribution),
