@@ -29,7 +29,7 @@ const BRANCHES = {
     },
     dw: {
         label:      'Distribution Warehouse (DW)',
-        dbName:     'BCVR-SBS',
+        dbName:     'BCVR-DW',
         branchCode: 'DW',
         acnFolder:  '13O7nLrcMA-MV_bLJHrfG6ZZbQSS6n59p',
         prdFolder:  '1CtYhtbaMgyNB36NPfoG8L5HC9Oz5aPuX',
