@@ -7,9 +7,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- BRANCH METADATA MAP ---
 const BRANCH_META = {
-    SBS: { prefix: 'SGR_ACN_SBS', label: 'Sorsogon Branch Store' },
-    MBS: { prefix: 'SGR_ACN_MBS', label: 'Masbate Branch Store'  },
-    IBS: { prefix: 'SGR_ACN_IBS', label: 'Iriga Branch Store'    },
+    IBS: { prefix: 'SGR_ACN_IBS', label: 'Iriga Branch Store'    }
 };
 
 const MONTH_LABELS = [
@@ -22,7 +20,7 @@ const MONTH_LABELS = [
 // --- HELPER: FIND SPREADSHEET BY CURRENT MONTH NAME ---
 async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
     const meta  = BRANCH_META[branchCode] || BRANCH_META['IBS'];
-    
+    const now = new Date()
     // Target LAST month (mirrors config.js buildLastMonthRange logic)
     const year  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1; // 0-indexed for MONTH_LABELS
@@ -875,29 +873,22 @@ async function syncQueryToSheet(pool, spreadsheetId, query, sheetName) {
             const batchData = [];
             
             // ✅ ADD HEADERS FOR NEGATIVE VARIANCE SECTION
-            if (sets[0]?.length > 0) {
-                const headers1 = Object.keys(sets[0][0]).map(key => formatCell(key, key));
-                const section1Values = [headers1, ...sets[0].map(r => formatRow(r))];
-                batchData.push({ range: `'${sheetName}'!A${startRow}`, values: section1Values });
-            } else if (sets[0]) {
-                // Headers only if no data
-                const headers1 = sets[0].columns ? sets[0].columns.map(col => col.name) : [];
-                if (headers1.length > 0) {
-                    batchData.push({ range: `'${sheetName}'!A${startRow}`, values: [headers1] });
-                }
+            // mssql .columns is a plain object keyed by name — NOT an array, so Object.keys() is correct
+            const headers1 = sets[0]?.length > 0
+                ? Object.keys(sets[0][0])
+                : Object.keys(sets[0]?.columns || {});
+            if (headers1.length > 0) {
+                const rows1 = (sets[0] || []).map(r => formatRow(r));
+                batchData.push({ range: `'${sheetName}'!A${startRow}`, values: [headers1, ...rows1] });
             }
-            
+
             // ✅ ADD HEADERS FOR POSITIVE VARIANCE SECTION
-            if (sets[1]?.length > 0) {
-                const headers2 = Object.keys(sets[1][0]).map(key => formatCell(key, key));
-                const section2Values = [headers2, ...sets[1].map(r => formatRow(r))];
-                batchData.push({ range: `'${sheetName}'!J${startRow}`, values: section2Values });
-            } else if (sets[1]) {
-                // Headers only if no data
-                const headers2 = sets[1].columns ? sets[1].columns.map(col => col.name) : [];
-                if (headers2.length > 0) {
-                    batchData.push({ range: `'${sheetName}'!J${startRow}`, values: [headers2] });
-                }
+            const headers2 = sets[1]?.length > 0
+                ? Object.keys(sets[1][0])
+                : Object.keys(sets[1]?.columns || {});
+            if (headers2.length > 0) {
+                const rows2 = (sets[1] || []).map(r => formatRow(r));
+                batchData.push({ range: `'${sheetName}'!J${startRow}`, values: [headers2, ...rows2] });
             }
 
             if (batchData.length > 0) {

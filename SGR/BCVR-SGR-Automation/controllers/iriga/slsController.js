@@ -7,9 +7,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- BRANCH METADATA MAP ---
 const BRANCH_META = {
-    SBS: { prefix: 'SGR_SLS_SBS', label: 'Sorsogon Branch Store' },
-    MBS: { prefix: 'SGR_SLS_MBS', label: 'Masbate Branch Store'  },
-    IBS: { prefix: 'SGR_SLS_IBS', label: 'Iriga Branch Store'    },
+    IBS: { prefix: 'SGR_SLS_IBS', label: 'Iriga Branch Store'    }
 };
 
 const MONTH_LABELS = [
@@ -22,7 +20,7 @@ const MONTH_LABELS = [
 // --- HELPER: FIND SPREADSHEET BY CURRENT MONTH NAME ---
 async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
     const meta  = BRANCH_META[branchCode] || BRANCH_META['IBS'];
-    
+    const now = new Date()
         // Target LAST month (mirrors config.js buildLastMonthRange logic)
     const year  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1; // 0-indexed for MONTH_LABELS
@@ -373,7 +371,9 @@ function getHeadersFromColumns(recordset) {
 
 async function syncQueryToSheet(pool, spreadsheetId, query, sheetName) {
     try {
-        const result = await pool.request().query(query);
+        const request = pool.request();
+        request.multiple = true;
+        const result = await request.query(query);
 
         // ── TOP 30: side-by-side tables ──────────────────────────────────────────
         // Layout (all anchored at row 5):

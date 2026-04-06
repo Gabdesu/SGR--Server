@@ -27,7 +27,7 @@ const MONTH_LABELS = [
 // --- HELPER: FIND SPREADSHEET BY CURRENT MONTH NAME ---
 async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
     const meta  = BRANCH_META[branchCode] || BRANCH_META['DDS'];
-
+    const now = new Date()
     // Target LAST month (mirrors config.js buildLastMonthRange logic)
     const year  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1; // 0-indexed for MONTH_LABELS
@@ -377,7 +377,9 @@ function getHeadersFromColumns(recordset) {
 
 async function syncQueryToSheet(pool, spreadsheetId, query, sheetName) {
     try {
-        const result = await pool.request().query(query);
+        const request = pool.request();
+        request.multiple = true;
+        const result = await request.query(query);
 
         // ── TOP 30: side-by-side tables ──────────────────────────────────────────
         // Layout (all anchored at row 5):

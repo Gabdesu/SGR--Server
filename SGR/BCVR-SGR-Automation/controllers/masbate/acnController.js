@@ -7,9 +7,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- BRANCH METADATA MAP ---
 const BRANCH_META = {
-    SBS: { prefix: 'SGR_ACN_SBS', label: 'Sorsogon Branch Store' },
-    MBS: { prefix: 'SGR_ACN_MBS', label: 'Masbate Branch Store'  },
-    IBS: { prefix: 'SGR_ACN_IBS', label: 'Iriga Branch Store'    },
+    MBS: { prefix: 'SGR_ACN_MBS', label: 'Masbate Branch Store'  }
 };
 
 const MONTH_LABELS = [
@@ -22,7 +20,7 @@ const MONTH_LABELS = [
 // --- HELPER: FIND SPREADSHEET BY CURRENT MONTH NAME ---
 async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
     const meta  = BRANCH_META[branchCode] || BRANCH_META['MBS'];
-    
+    const now = new Date()
         // Target LAST month (mirrors config.js buildLastMonthRange logic)
     const year  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1; // 0-indexed for MONTH_LABELS
@@ -203,18 +201,17 @@ ORDER BY [Date] ASC`,
 
     'Remittance': `
 DECLARE @SalesCategory VARCHAR(MAX);
-DECLARE @SalesDate_From Date; 
-DECLARE @SalesDate_To Date;
+DECLARE @StartDate DATE = '${DATE.sql.start}';
+DECLARE @EndDate   DATE = '${DATE.sql.end}';
+
 
 SET @SalesCategory = '%%';
-SET @SalesDate_From = '${DATE.sql.start}';
-SET @SalesDate_To   = '${DATE.sql.end}';
 
-select Remittance_Date AS [Remittance Date], LEFT(Order_Type, 4) as Order_Type AS [Order Type], Total_Net AS [Total Net], Total_Remittance AS [Total Remittance],
-Deposit_Deposited AS [Deposit Deposited], Cash_ShortOver AS [Cash Short/Over], Deposit_ShortOver AS [Deposit Short/Over], Total_Expense AS [Total Expense], Expense_Replenished AS [Expense Replenished]
-from TBL_Remittance
-where Remittance_Date between @SalesDate_From and @SalesDate_To
-order by Remittance_Date;
+select Remittance_Date, LEFT(Order_Type, 4) as Order_Type, Total_Net,Total_Remittance,
+Deposit_Deposited, Cash_ShortOver, Deposit_ShortOver, Total_Expense, Expense_Replenished   from TBL_Remittance
+where Remittance_Date between @StartDate and @EndDate
+order by Remittance_Date
+
 
 select 
 Deposit_Date,
@@ -224,7 +221,7 @@ Amount,
 Deposit_Type,
 Deposit_Status
 from TBL_Remittance_Deposit
-where Deposit_Date between @SalesDate_From and @SalesDate_To
+where Deposit_Date between @StartDate and @EndDate
 order by Deposit_Date`,
 
     'Remittance Deposit': `

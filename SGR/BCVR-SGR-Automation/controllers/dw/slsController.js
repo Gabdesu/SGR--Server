@@ -7,10 +7,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // --- BRANCH METADATA MAP ---
 const BRANCH_META = {
-  SBS: { prefix: "SGR_SLS_SBS", label: "Sorsogon Branch Store" },
-  MBS: { prefix: "SGR_SLS_MBS", label: "Masbate Branch Store" },
-  IBS: { prefix: "SGR_SLS_IBS", label: "Iriga Branch Store" },
-  DW: { prefix: "SGR_SLS_DW", label: "Distribution Warehouse" },
+  DW: { prefix: "SGR_SLS_DW", label: "Distribution Warehouse" }
 };
 
 const MONTH_LABELS = [
@@ -627,7 +624,9 @@ function getHeadersFromColumns(recordset) {
 
 async function syncQueryToSheet(pool, spreadsheetId, query, sheetName) {
   try {
-    const result = await pool.request().query(query);
+    const request = pool.request();
+        request.multiple = true;
+        const result = await request.query(query);
 
     // ── TOP 30: side-by-side tables ──────────────────────────────────────────
     // Layout (all anchored at row 5):

@@ -7,9 +7,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- BRANCH METADATA MAP ---
 const BRANCH_META = {
-    SBS: { prefix: 'SGR_SLS_SBS', label: 'Sorsogon Branch Store' },
-    MBS: { prefix: 'SGR_SLS_MBS', label: 'Masbate Branch Store'  },
-    IBS: { prefix: 'SGR_SLS_IBS', label: 'Iriga Branch Store'    },
+    SBS: { prefix: 'SGR_SLS_SBS', label: 'Sorsogon Branch Store' }
 };
 
 const MONTH_LABELS = [
@@ -22,7 +20,7 @@ const MONTH_LABELS = [
 // --- HELPER: FIND SPREADSHEET BY CURRENT MONTH NAME ---
 async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
     const meta  = BRANCH_META[branchCode] || BRANCH_META['SBS'];
-
+    const now = new Date()
         // Target LAST month (mirrors config.js buildLastMonthRange logic)
     const year  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1; // 0-indexed for MONTH_LABELS
@@ -201,7 +199,7 @@ const queries = {
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT TOP 30
-            ''              AS [#],
+            ''              AS [No],
             'SWRS'          AS [BOSC],
             Client_Name     AS [Entity],
             SUM(ISNULL(PO_Amount, 0)) - SUM(ISNULL(Payment_Amount, 0)) AS [Total Balance]
@@ -213,27 +211,38 @@ const queries = {
         ORDER BY [Total Balance] DESC`,
 
     'Top Inactive': `
+        DECLARE @SalesCategory VARCHAR(MAX);
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        DECLARE @Active_From DATE;
+        DECLARE @Active_To   DATE;
+        SET @SalesCategory = '%Sales%';
+        SET @Active_From = '01/01/2023';
+        SET @Active_To   = '12/31/2025';
         SELECT TOP 30
-            ''  AS [#],
-            CASE 
-                WHEN Order_Type LIKE '%Government%' OR Order_Type LIKE '%SFGS%' THEN 'SFGS'
-                ELSE 'SWRS'
-            END AS [BOSC],
-            Client_Name AS [Entity],
-            SUM(ISNULL(PO_Amount, 0)) AS [Total Consumption]
+            ''                       AS [No],
+            LEFT(MAX(Order_Type), 4) AS [BOSC],
+            Client_Name              AS [Entity],
+            SUM(Product_Total)       AS [Total Consumption]
         FROM TBL_Orders
-        WHERE (Order_Type LIKE '%Sorsogon%' OR Order_Type LIKE '%SWRS%' OR Order_Type LIKE '%SFGS%')
-        GROUP BY Client_Name, Order_Type
-        HAVING MAX(CAST(Order_Date AS DATE)) < @StartDate
-        ORDER BY [Total Consumption] DESC`,
+        WHERE Order_Date BETWEEN @Active_From AND @Active_To
+          AND Order_Type LIKE @SalesCategory
+          AND Order_Type NOT LIKE '%Transfer%'
+          AND Client_Name NOT IN (
+              SELECT Client_Name FROM TBL_Orders
+              WHERE Order_Date BETWEEN @StartDate AND @EndDate
+                AND Order_Type LIKE '%' + @SalesCategory + '%'
+                AND Order_Type NOT LIKE '%Transfer%'
+              GROUP BY Client_Name
+          )
+        GROUP BY Client_Name
+        ORDER BY SUM(Product_Total) DESC`,
 
     'New Clients': `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT 
-            ''              AS [#],
+            ''              AS [No],
             FORMAT(MIN(O.Order_Date), 'yyyy-MM-dd') AS [Date Added],
             O.Client_Name   AS [Name],
             O.Client_Address AS [Address],
@@ -248,7 +257,7 @@ const queries = {
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT 
-            ''              AS [#],
+            ''              AS [No],
             FORMAT(MIN(Order_Date), 'yyyy-MM-dd') AS [Date Recorded],
             CASE 
                 WHEN Order_Type LIKE '%Government%' OR Order_Type LIKE '%SFGS%' THEN 'SFGS'
@@ -267,7 +276,7 @@ const queries = {
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT 
-            ''      AS [#],
+            ''      AS [No],
             CASE WHEN Order_Type LIKE '%SFGS%' THEN 'SFGS' ELSE 'SWRS' END AS [Sales Category],
             Client_Name AS [Entity],
             ''      AS [Contact Person],
@@ -372,7 +381,9 @@ function getHeadersFromColumns(recordset) {
 
 async function syncQueryToSheet(pool, spreadsheetId, query, sheetName) {
     try {
-        const result = await pool.request().query(query);
+        const request = pool.request();
+        request.multiple = true;
+        const result = await request.query(query);
 
         // ── TOP 30: side-by-side tables ──────────────────────────────────────────
         // Layout (all anchored at row 5):

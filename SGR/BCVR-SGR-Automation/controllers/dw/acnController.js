@@ -7,10 +7,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // --- BRANCH METADATA MAP ---
 const BRANCH_META = {
-  SBS: { prefix: "SGR_ACN_SBS", label: "Sorsogon Branch Store" },
-  MBS: { prefix: "SGR_ACN_MBS", label: "Masbate Branch Store" },
-  IBS: { prefix: "SGR_ACN_IBS", label: "Iriga Branch Store" },
-  DW: { prefix: "SGR_ACN_DW", label: "Distribution Warehouse" },
+  DW: { prefix: "SGR_ACN_DW", label: "Distribution Warehouse" }
 };
 
 const MONTH_LABELS = [
@@ -332,71 +329,171 @@ function buildQueries(dbName) {
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
-        Query here ***
+        select 
+Date_Debit,
+REPLACE(COALESCE(Date_Check, ''), '1900-01-01', '') as Date_Check,
+Date_Payment,
+Purchased_Date,
+Received_Date,
+SuppName,
+InvoiceDetails,
+InvoiceDetails_Extra,
+InvoiceDetails_Plus,
+Payment_Amount,
+case when InvoiceDetails != '' then Purchase_Total else 0 end as NonOfficial,
+case when InvoiceDetails_Extra != '' then Purchase_Total else 0 end as SalesInvoice,
+case when InvoiceDetails_Plus != '' then Purchase_Total else 0 end as SalesInvoiceVAT
+from TBL_Purchase_Order_Payment
+inner join TBL_Purchase_Order on TBL_Purchase_Order.Purchase_ID = TBL_Purchase_Order_Payment.Purchase_ID
+inner join TBL_Suppliers on TBL_Suppliers.Supp_ID = TBL_Purchase_Order.Supp_ID
+where Date_Debit between @StartDate and @EndDate
+and SuppName not like '%BCVR%'
+and Payment_Mode = 'Cash'
+order by Date_Debit
         `,
 
     "AP - Debit (COGS2)": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
-        Query here ***
+        select 
+Date_Debit,
+REPLACE(COALESCE(Date_Check, ''), '1900-01-01', '') as Date_Check,
+Date_Payment,
+Purchased_Date,
+Received_Date,
+SuppName,
+InvoiceDetails,
+InvoiceDetails_Extra,
+InvoiceDetails_Plus,
+Payment_Amount,
+case when InvoiceDetails != '' then Purchase_Total else 0 end as NonOfficial,
+case when InvoiceDetails_Extra != '' then Purchase_Total else 0 end as SalesInvoice,
+case when InvoiceDetails_Plus != '' then Purchase_Total else 0 end as SalesInvoiceVAT
+from TBL_Purchase_Order_Payment
+inner join TBL_Purchase_Order on TBL_Purchase_Order.Purchase_ID = TBL_Purchase_Order_Payment.Purchase_ID
+inner join TBL_Suppliers on TBL_Suppliers.Supp_ID = TBL_Purchase_Order.Supp_ID
+where Date_Debit between @StartDate and @EndDate
+and SuppName not like '%BCVR%'
+and Payment_Mode = 'Cash'
+order by Date_Debit
         `,
 
     "AP - Overdue": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
-        Query here ***
+        SELECT
+    TBL_Purchase_Order.Purchase_ID AS Purchase_ID,
+Purchased_Date,
+Received_Date,
+Due_Date,
+TBL_Suppliers.SuppName,
+Delivery_Term,
+TBL_Suppliers.Supp_TIN,
+COALESCE(PurchaseOrder_No, '') as PO_No,
+InvoiceDetails,
+InvoiceDetails_Extra,
+InvoiceDetails_Plus,
+FORMAT(Purchase_Total, 'N2') AS Purchase_Total,
+FORMAT(COALESCE(Tax_Amount, '0'), 'N2') AS Tax_Amount,
+FORMAT(Purchase_Total - COALESCE(Tax_Amount, '0')
+ - COALESCE((select sum(Payment_Amount) 
+        from TBL_Purchase_Order_Payment 
+           where TBL_Purchase_Order_Payment.Purchase_ID 
+            =  TBL_Purchase_Order.Purchase_ID 
+            ), 0)
+   , 'N2') as Balance,
+COALESCE(Payable_Status, 'Unpaid') AS Payable_Status,
+Remarks
+FROM TBL_Purchase_Order
+INNER JOIN TBL_Suppliers
+    ON TBL_Suppliers.Supp_ID = TBL_Purchase_Order.Supp_ID
+WHERE SuppName NOT LIKE '%BCVR%'
+  AND YEAR(Received_Date) >= 2023
+  AND Due_Date < '01/01/2026'
+  AND Delivery_Term not like '%Consignment%'
+  AND COALESCE(Payable_Status, 'Unpaid') = 'Unpaid'
+ORDER BY
+    Due_Date,
+    SuppName;
         `,
 
     "AP - Audit": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
-        Query here ***
+        SELECT
+    TBL_Purchase_Order.Purchase_ID AS Purchase_ID,
+Purchased_Date,
+Received_Date,
+Due_Date,
+TBL_Suppliers.SuppName,
+Delivery_Term,
+TBL_Suppliers.Supp_TIN,
+COALESCE(PurchaseOrder_No, '') as PO_No,
+InvoiceDetails,
+InvoiceDetails_Extra,
+InvoiceDetails_Plus,
+FORMAT(Purchase_Total, 'N2') AS Purchase_Total,
+FORMAT(COALESCE(Tax_Amount, '0'), 'N2') AS Tax_Amount,
+FORMAT(Purchase_Total - COALESCE(Tax_Amount, '0')
+ - COALESCE((select sum(Payment_Amount) 
+        from TBL_Purchase_Order_Payment 
+           where TBL_Purchase_Order_Payment.Purchase_ID 
+            =  TBL_Purchase_Order.Purchase_ID 
+            ), 0)
+   , 'N2') as Balance,
+COALESCE(Payable_Status, 'Unpaid') AS Payable_Status,
+Remarks
+FROM TBL_Purchase_Order
+INNER JOIN TBL_Suppliers
+    ON TBL_Suppliers.Supp_ID = TBL_Purchase_Order.Supp_ID
+WHERE SuppName NOT LIKE '%BCVR%'
+  AND YEAR(Received_Date) >= 2024
+  AND Due_Date < '01/01/2026'
+  AND Delivery_Term not like '%Consignment%'
+  AND COALESCE(Payable_Status, 'Unpaid') = 'Paid'
+  AND ABS(Purchase_Total - COALESCE(Tax_Amount, '0')
+ - COALESCE((select sum(Payment_Amount) 
+        from TBL_Purchase_Order_Payment 
+           where TBL_Purchase_Order_Payment.Purchase_ID 
+            =  TBL_Purchase_Order.Purchase_ID 
+            ), 0)) > 10
+ORDER BY
+    Due_Date,
+    SuppName;
         `,
 
     "Check Transmittal": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
-        Query here ***
+        //Query here ***
         `,
 
-    Disbursement: `
+   "Disbursement": `
         DECLARE @Date_From DateTime = '${DATE.sql.datetimeStart}';
         DECLARE @Date_To   DateTime = '${DATE.sql.datetimeEnd}';
-        SELECT 
-            p.Order_Payment_Id  AS [ID],
-            ''                  AS [GV No],
-            p.BankRef_No        AS [Check No],
-            p.Payment_Amount    AS [Check Amount],
-            p.Payment_Date      AS [Date Processed],
-            o.Client_Name       AS [Particulars],
-            o.Misc_CheckVoucher AS [Voucher No],
-            p.Payment_Amount    AS [Request Amount],
-            p.Payment_Amount    AS [Released Amount],
-            0                   AS [Discrepancy / For Deposit],
-            ''                  AS [Requestor]
-        FROM TBL_Orders_Payment p
-        LEFT JOIN TBL_Orders o ON p.Order_No = o.Order_No
-        WHERE p.Payment_Date BETWEEN @Date_From AND @Date_To
-        UNION ALL
-        SELECT 
-            OPEX_ID             AS [ID],
-            ''                  AS [GV No],
-            Voucher_no          AS [Check No],
-            Payment_Amount      AS [Check Amount],
-            Voucher_date        AS [Date Processed],
-            ISNULL(payee, OPEX_Particular) AS [Particulars],
-            Voucher_no          AS [Voucher No],
-            Payment_Amount      AS [Request Amount],
-            Payment_Amount      AS [Released Amount],
-            0                   AS [Discrepancy / For Deposit],
-            Encoded_by          AS [Requestor]
-        FROM TBL_Operational_Expense
-        WHERE Voucher_date BETWEEN @Date_From AND @Date_To
-        ORDER BY [Date Processed] ASC`,
+        select
+MAX(TBL_Disbursement.Disbursement_ID) as Disbursement_ID,
+MAX(TBL_Disbursement.GV_No) as GV_No,
+MAX(TBL_Disbursement.Check_No) as Check_No,
+MAX(TBL_Disbursement.Check_Amount) as Check_Amount,
+MAX(Date_Processed) as Date_Processed,
+MAX(Particulars) as Particulars,
+TBL_Disbursement_CashRequest.Voucher_no,
+MAX(Request_Amount) as Request_Amount,
+sum(COALESCE(Payment_Amount, 0)) as Payment_Amount,
+MAX(Request_Amount) - sum(COALESCE(Payment_Amount, 0)) as Variance,
+MAX(Requested_By) as Requested_By
+from TBL_Disbursement_CashRequest
+inner join TBL_Disbursement on TBL_Disbursement.Disbursement_ID = TBL_Disbursement_CashRequest.Disbursement_ID
+LEFT join TBL_Operational_Expense on TBL_Operational_Expense.Voucher_no = TBL_Disbursement_CashRequest.Voucher_No
+where Date_Processed between @Date_From and @Date_To
+
+group by TBL_Disbursement_CashRequest.Voucher_no
+order by MAX(Date_Processed) asc`,
 
     "Disbursement Deposit": `
         SELECT 
@@ -414,7 +511,12 @@ function buildQueries(dbName) {
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
-        Query here ***
+        select min(p.Received_Date), SuppName, max(REPLACE(SuppAdd, '$..$ ', ', ')), max(SuppType)
+from TBL_Purchase_Order p
+inner join TBL_Suppliers s on s.Supp_ID = p.Supp_ID
+where s.SuppName not like '%BCVR%'
+group by s.SuppName
+having min(p.Received_Date) between @Date_From and @Date_To
         `,
 
     "Procurement Audit": `
@@ -468,7 +570,7 @@ function buildQueries(dbName) {
           AND trans_date < DATEADD(DAY, 1, @EndDate)
         ORDER BY trans_date ASC`,
 
-    Commitment: `
+    "Commitment": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT 

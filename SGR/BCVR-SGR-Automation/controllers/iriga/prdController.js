@@ -7,9 +7,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- BRANCH METADATA MAP ---
 const BRANCH_META = {
-    SBS: { prefix: 'SGR_PRD_SBS', label: 'Sorsogon Branch Store' },
-    MBS: { prefix: 'SGR_PRD_MBS', label: 'Masbate Branch Store'  },
-    IBS: { prefix: 'SGR_PRD_IBS', label: 'Iriga Branch Store'    },
+    IBS: { prefix: 'SGR_PRD_IBS', label: 'Iriga Branch Store'    }
 };
 
 const MONTH_LABELS = [
@@ -22,7 +20,7 @@ const MONTH_LABELS = [
 // --- HELPER: FIND SPREADSHEET BY CURRENT MONTH NAME ---
 async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
     const meta  = BRANCH_META[branchCode] || BRANCH_META['IBS'];
-    
+    const now = new Date()
         // Target LAST month (mirrors config.js buildLastMonthRange logic)
     const year  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1; // 0-indexed for MONTH_LABELS
@@ -119,61 +117,52 @@ GROUP BY
 ORDER BY Freq DESC`,
 
     'Procurement': `
-        
--- Set the monthly reporting window
-DECLARE @StartDate DATE = '${DATE.sql.start}';
-DECLARE @EndDate   DATE = '${DATE.sql.end}';
-
-SELECT 
-    NULL AS Encode,
-    NULL AS Entity,
-    -- Column C: Days since the order was placed relative to the end of your report month
-    DATEDIFF(day, O.Order_Date, @EndDate) AS [Days Lacking],
-    I.Item_Name AS Product,
-    NULL AS Brand,
-    SUM(OD.QTY) AS Quantity,
-    I.Item_Packaging AS Packaging,
-    -- Using the confirmed column name from your previous discovery:
-    I.Item_Org_Price AS [Unit Cost], 
-    (SUM(OD.QTY) * I.Item_Org_Price) AS Total,
-    'Lacking' AS Status
-FROM TBL_Orders_Detail OD
-INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-WHERE OD.QTY > 0 
-  -- Filters for orders specifically within your target month
-  AND O.Order_Date BETWEEN @StartDate AND @EndDate
-GROUP BY I.Item_Name, I.Item_Packaging, I.Item_Org_Price, O.Order_Date
-ORDER BY [Days Lacking] DESC;`,
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        SELECT
+    OL_BookingDate,
+    OL_Entity AS 'Entity',
+    DATEDIFF(DAY, OL_BookingDate, @EndDate) as Days_Lacking,
+    Item_Description AS 'Product',
+    Item_Brand AS 'Brand',
+    Quantity,
+    Item_Packaging,
+    Unit_Cost 'Unit Cost',
+    Unit_Total AS 'Total',
+    Item_Status AS Status
+FROM TBL_Orders_Lacking_Details
+INNER JOIN TBL_Orders_Lacking
+    ON TBL_Orders_Lacking.OL_ID = TBL_Orders_Lacking_Details.OL_ID
+WHERE
+    (Item_Status != 'Served'
+     AND Item_Status != 'Changed Item'
+     AND Item_Status != 'Waived')
+    and OL_BookingDate <= @EndDate
+ORDER BY Item_Description`,
 
     'Procurement-Special': `
-
--- Set the monthly reporting window
-DECLARE @StartDate DATE = '${DATE.sql.start}';
-DECLARE @EndDate   DATE = '${DATE.sql.end}';
-
-SELECT 
-    NULL AS [Encode],               -- Column A
-    NULL AS [Entity],               -- Column B
-    -- Column C: Days since order relative to the end of the report month
-    DATEDIFF(day, O.Order_Date, @EndDate) AS [Days Lacking], 
-    I.Item_Name AS [Product],       -- Column D
-    NULL AS [Brand],                -- Column E
-    SUM(OD.QTY) AS [Quantity],      -- Column F
-    I.Item_Packaging AS [Packaging],-- Column G
-    I.Item_Org_Price AS [Unit Cost],-- Column H
-    SUM(OD.QTY * I.Item_Org_Price) AS [Total], -- Column I
-    'Special Case' AS [Status]      -- Column J
-FROM TBL_Orders_Detail OD
-INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-WHERE OD.QTY > 0 
-  -- Filter for the specific month
-  AND O.Order_Date BETWEEN @StartDate AND @EndDate
-  -- Keeps your specific 'Special Case' logic (group_ID = 3)
-  AND I.Catg_ID IN (SELECT Catg_ID FROM TBL_Category_File WHERE group_ID = 3)
-GROUP BY I.Item_Name, I.Item_Packaging, I.Item_Org_Price, O.Order_Date
-ORDER BY [Days Lacking] DESC;`,
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        SELECT
+    OL_BookingDate,
+    OL_Entity AS 'Entity',
+    DATEDIFF(DAY, OL_BookingDate, @EndDate) as Days_Lacking,
+    Item_Description AS 'Product',
+    Item_Brand AS 'Brand',
+    Quantity,
+    Item_Packaging,
+    Unit_Cost 'Unit Cost',
+    Unit_Total AS 'Total',
+    Item_Status AS Status
+FROM TBL_Orders_Lacking_Details
+INNER JOIN TBL_Orders_Lacking
+    ON TBL_Orders_Lacking.OL_ID = TBL_Orders_Lacking_Details.OL_ID
+WHERE
+    (Item_Status = 'Changed Item'
+     AND Item_Status = 'Waived')
+    and OL_BookingDate <= @EndDate
+ORDER BY Item_Description;
+`,
 
     'Slow Moving': `
 
@@ -201,100 +190,95 @@ AND I.Item_ID NOT IN (
 ORDER BY S.Item_QTY DESC;`,
 
     'Out of Stocks': `
--- Set the audit window
-DECLARE @StartDate DATE = '${DATE.sql.start}';
-DECLARE @EndDate   DATE = '${DATE.sql.end}';
-DECLARE @Threshold INT = 2; -- Change this number to define what "Low" is
-
-SELECT DISTINCT 
-    I.Item_Name AS Product,
-    S.Item_QTY AS Quantity,
-    I.Item_Packaging AS Packaging,
-    I.Item_Org_Price AS [Unit Price],
-    (S.Item_QTY * I.Item_Org_Price) AS [Total Value]
-FROM TBL_Category_Item_File I
-INNER JOIN TBL_Stocks_Balances S ON I.Item_ID = S.Item_ID
-WHERE S.Item_QTY > 0             -- Must have SOME stock
-  AND S.Item_QTY <= @Threshold    -- But less than or equal to 10
-ORDER BY S.Item_QTY ASC;          -- Show the most urgent ones first`,
+    DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        Select 
+CONCAT(TRIM(OS_Product_Name), ' ', OS_Brand) as Product,  
+sum(OS_Quantity) as Qty, 
+MAX(OS_Unit) as Unit, 
+CASE WHEN SUM(OS_Price * OS_Quantity) = 0 Then 0 else SUM(OS_Price * OS_Quantity) / sum(OS_Quantity) end,
+SUM(OS_Price * OS_Quantity) as Total
+from TBL_OutOfStock_Lacking
+where OS_date >= @StartDate and OS_date <= @EndDate
+group by CONCAT(TRIM(OS_Product_Name), ' ', OS_Brand)`,
 
     'Discounted (Loyalty)': `
-DECLARE @StartDate DATE = '${DATE.sql.start}';
-DECLARE @EndDate   DATE = '${DATE.sql.end}';
-
-SELECT 
-    I.Item_Name AS [Product_Name],                       -- Column 1
-    SUM(OD.QTY) AS [Quantity],                           -- Column 2
-    I.Item_Packaging AS [Packaging],                     -- Column 3
-    AVG(OD.Disc_Price) AS [Discounted Price],            -- Column 4
-    AVG(OD.Orig_Price) AS [Original Price],              -- Column 5 (FIXED)
-    SUM(OD.Disc_Price * OD.QTY) AS [Total Discounted],   -- Column 6
-    SUM(OD.Orig_Price * OD.QTY) AS [Total Original]       -- Column 7 (FIXED)
-FROM TBL_Orders_Detail OD
-INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID 
-WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
-  AND OD.isLoyalty = 'Yes' 
-GROUP BY I.Item_Name, I.Item_Packaging, I.Item_ID 
-ORDER BY [Total Discounted] DESC;`,
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        SELECT
+            I.Item_Name                 AS "Product Name",
+            SUM(OD.QTY)                 AS Quantity,
+            I.Item_Packaging            AS Packaging,
+            AVG(OD.Disc_Price)          AS "Discounted Price",
+            AVG(OD.Orig_Price)          AS "Original Price",
+            SUM(OD.Disc_Price * OD.QTY) AS "Total Discounted",
+            SUM(OD.Orig_Price * OD.QTY) AS "Total Original"
+        FROM TBL_Orders_Detail OD
+        INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
+        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
+        WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
+          AND OD.isLoyalty = 'Yes'
+        GROUP BY I.Item_Name, I.Item_Packaging, I.Item_ID
+        ORDER BY SUM(OD.Disc_Price * OD.QTY) DESC`,
 
     'Discounted (Senior)': `
-DECLARE @StartDate DATE = '${DATE.sql.start}';
-DECLARE @EndDate   DATE = '${DATE.sql.end}';
-
-SELECT 
-    I.Item_Name AS [Product_Name],
-    SUM(OD.QTY) AS [Quantity],
-    I.Item_Packaging AS [Packaging],
-    AVG(OD.Disc_Price) AS [Discounted Price],
-    AVG(OD.Orig_Price) AS [Original Price],
-    SUM(OD.Disc_Price * OD.QTY) AS [Total Discounted],
-    SUM(OD.Orig_Price * OD.QTY) AS [Total Original]
-FROM TBL_Orders_Detail OD
-INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID 
-WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
-  AND OD.isSenior = 'Yes' 
-GROUP BY I.Item_Name, I.Item_Packaging, I.Item_ID 
-ORDER BY [Total Discounted] DESC;`,
-
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        SELECT
+            I.Item_Name                 AS "Product Name",
+            SUM(OD.QTY)                 AS Quantity,
+            I.Item_Packaging            AS Packaging,
+            AVG(OD.Disc_Price)          AS "Discounted Price",
+            AVG(OD.Orig_Price)          AS "Original Price",
+            SUM(OD.Disc_Price * OD.QTY) AS "Total Discounted",
+            SUM(OD.Orig_Price * OD.QTY) AS "Total Original"
+        FROM TBL_Orders_Detail OD
+        INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
+        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
+        WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
+          AND OD.isSenior = 'Yes'
+        GROUP BY I.Item_Name, I.Item_Packaging, I.Item_ID
+        ORDER BY SUM(OD.Disc_Price * OD.QTY) DESC`,
 
     'Expired': `
--- Set the audit window (February 2026)
-DECLARE @TargetMonth NVARCHAR(7) = '02/2026'; -- Matches your "Exp. Date" format
-DECLARE @TargetMonthAlt NVARCHAR(7) = '02/2026'; -- Matches the single digit format
-
-SELECT 
-    I.Item_Name AS [Product Name],      -- Column A
-    OD.Lot_No AS [Lot Number],          -- Column B
-    OD.Exp_Date AS [Exp. Date],         -- Column C
-    I.Item_Org_Price AS [Capital],      -- Column D
-    (OD.QTY * I.Item_Org_Price) AS [Total], -- Column E
-    OD.QTY AS [Quantity]                -- Column F
-FROM TBL_Orders_Detail OD
-INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-WHERE OD.QTY > 0 
-  -- Find items that expired in or before Feb 2026 based on your text format
-  AND (OD.Exp_Date = @TargetMonth OR OD.Exp_Date = @TargetMonthAlt)
-ORDER BY OD.Exp_Date ASC;`,
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        SELECT 
+    CONCAT(TBL_Category_Item_File.Item_Name, ' ', TBL_Category_File.Catg_Name) AS Item_Name,
+    CASE 
+        WHEN LEFT(TBL_category_item_file.Item_Description, 4) = 'BCVR' THEN '-' 
+        ELSE TBL_category_item_file.Item_Description 
+    END AS 'Item_Description',
+    REPLACE(FORMAT(TBL_Category_Item_File.Item_Exp_Date, 'MM/yyyy'), '01/2040', '-') AS Item_Exp_Date,
+    TBL_Category_Item_File.Item_Price AS Capital,
+    TBL_Category_Item_File.Item_Price * TBL_Stocks_Balances.Item_QTY AS Total,
+    CONCAT(TBL_Stocks_Balances.Item_QTY, ' ', Item_packaging) AS Quantity
+FROM TBL_Category_Item_File
+INNER JOIN TBL_Stocks_Balances ON TBL_Stocks_Balances.Item_ID = TBL_Category_Item_File.Item_ID
+INNER JOIN TBL_Category_File ON TBL_Category_File.Catg_ID = TBL_Category_Item_File.Catg_ID
+WHERE Item_Exp_Date <= CAST(EOMONTH(DATEADD(MONTH, 10, GETDATE())) AS DATETIME)
+    AND TBL_Stocks_Balances.Item_QTY > 0
+ORDER BY TBL_Category_Item_File.Item_Exp_Date, Item_Name`,
 
     'Near Expiry': `
--- Set your reporting window here
-DECLARE @StartDate DATE = '${DATE.sql.start}';
-DECLARE @EndDate   DATE = '${DATE.sql.end}';
-
-SELECT 
-    I.Item_Name AS [Product Name],                  
-    OD.Lot_No AS [Lot Number],                      
-    OD.Exp_Date AS [Exp. Date],                     
-    I.Item_Org_Price AS [Capital],                 
-    (OD.QTY * I.Item_Org_Price) AS [Total],         
-    OD.QTY AS [Quantity]                            
-FROM TBL_Orders_Detail OD
-INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-WHERE TRY_CAST(OD.Exp_Date AS DATE) BETWEEN @StartDate AND DATEADD(day, 30, @StartDate)
-  AND OD.QTY > 0
-ORDER BY TRY_CAST(OD.Exp_Date AS DATE) ASC;`,
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        SELECT 
+    CONCAT(TBL_Category_Item_File.Item_Name, ' ', TBL_Category_File.Catg_Name) AS Item_Name,
+    CASE 
+        WHEN LEFT(TBL_category_item_file.Item_Description, 4) = 'BCVR' THEN '-' 
+        ELSE TBL_category_item_file.Item_Description 
+    END AS 'Item_Description',
+    REPLACE(FORMAT(TBL_Category_Item_File.Item_Exp_Date, 'MM/yyyy'), '01/2040', '-') AS Item_Exp_Date,
+    TBL_Category_Item_File.Item_Price AS Capital,
+    TBL_Category_Item_File.Item_Price * TBL_Stocks_Balances.Item_QTY AS Total,
+    CONCAT(TBL_Stocks_Balances.Item_QTY, ' ', Item_packaging) AS Quantity
+FROM TBL_Category_Item_File
+INNER JOIN TBL_Stocks_Balances ON TBL_Stocks_Balances.Item_ID = TBL_Category_Item_File.Item_ID
+INNER JOIN TBL_Category_File ON TBL_Category_File.Catg_ID = TBL_Category_Item_File.Catg_ID
+WHERE Item_Exp_Date <= CAST(EOMONTH(DATEADD(MONTH, -1, GETDATE())) AS DATETIME)
+    AND TBL_Stocks_Balances.Item_QTY > 0
+ORDER BY TBL_Category_Item_File.Item_Exp_Date, Item_Name`,
 
     'Top Peso Sold (Meds)': `
 

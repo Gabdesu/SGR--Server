@@ -1,7 +1,7 @@
 @echo off
 title Google Sheets SQL Sync Server
 :: Navigate to your project directory (Change the path below to your actual folder)
-cd /d "C:\Users\ganon\Documents\BCVR-Internship\SGR\BCVR-SGR-SERVER"
+cd /d "C:\Users\ganon\Documents\BCVR-Internship\SGR\BCVR-SGR-Automation"
 
 echo 🚀 Starting the Sync Server...
 :: Check if node_modules exists, if not, try to install

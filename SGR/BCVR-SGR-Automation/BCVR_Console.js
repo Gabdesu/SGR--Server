@@ -28,10 +28,10 @@ const BRANCHES = {
   },
   dw: {
     label: "Distribution Warehouse (DW)",
-    dbName: "BCVR-SBS",
-    branchCode: "SBS",
+    dbName: "BCVR-DW",
+    branchCode: "DW",
     acnFolder: "13O7nLrcMA-MV_bLJHrfG6ZZbQSS6n59p",
-    prdFolder: "1s2NS6sTQC8TgfHXEd7BU-fNjRAgaeXNF",
+    prdFolder: "1CtYhtbaMgyNB36NPfoG8L5HC9Oz5aPuX",
     slsFolder: "14VG5m1l-B5eTemvK0ZXk6MqcXGwbX4Q4",
   },
   dds: {
@@ -54,9 +54,9 @@ const BRANCHES = {
     label: "Iriga Branch (IBS)",
     dbName: "BCVR-IBS",
     branchCode: "IBS",
-    acnFolder: "1-YKqq_8CCAA3tENqH_sGJKz1x_C1VHaE",
-    prdFolder: "1uSM3YyTOLmnMcIubRQsov3vvAuyAEui1",
-    slsFolder: "1LK1kmCB-iVb37p7Lj2w6RUQ-Ozm6AUfa",
+    acnFolder: "1NYRzyrMh0y24051_9AaWLg45CHHMc4zL",
+    prdFolder: "1geoGvNvDngTzlXD-LaE8PPyp5LwUG-3z",
+    slsFolder: "1MgJDN1xhxypvLsb-CvlF-LhU_jLP6F8V",
   },
   phssi: {
     label: "Pharmacy Sale Store Iriga (PHSSI)",
@@ -70,17 +70,17 @@ const BRANCHES = {
     label: "Masbate Branch (MBS)",
     dbName: "BCVR-MBS",
     branchCode: "MBS",
-    acnFolder: "10p-jWvb8LdVFwWy-bzyP10om0b6KgKn6",
-    prdFolder: "1GWxLrCyxKjKX1A19hJYpsAIIkDNeNoiT",
-    slsFolder: "1czYqvtmYrvSjUleTdMtEJkOfbyJpzvr7",
+    acnFolder: "1lgz5m7pXQsS8u25V4tjIIlMU_ojQYaNY",
+    prdFolder: "1AuxNUBHdiZUQLLOyzG7Lc66q6sJvRQFX",
+    slsFolder: "11WnXyYB0OBX7HuRz_fdCSHQmvdHF9yHI",
   },
   sorsogon: {
     label: "Sorsogon Branch (SBS)",
     dbName: "BCVR-SBS",
     branchCode: "SBS",
-    acnFolder: "1MWei3v1aAv6gZqnGZ_vFDogUHpwtsw3o",
-    prdFolder: "16EUF96TG5GZBowNHo37pTmA1YsZlGOys",
-    slsFolder: "1wMYho2SlFSjO8JIUAIK88Ls4yqLGRdln",
+    acnFolder: "1ZlrquPeXvzaJdAk1bqBLLFPL6m1nqaKm",
+    prdFolder: "1s2NS6sTQC8TgfHXEd7BU-fNjRAgaeXNF",
+    slsFolder: "1cb2TKC7AgN8PhSvGZo9naZoQOCXeyDxt"
   },
   // ── Add the remaining 5 branches below ──────────────────
   // branch4: {

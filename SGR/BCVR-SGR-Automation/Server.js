@@ -8,30 +8,71 @@ const { getPool, refreshAuth } = require('./config');
 //  from its dedicated folder automatically.
 // ─────────────────────────────────────────────
 const BRANCHES = {
-    sorsogon: {
-        dbName:        'BCVR-SBS',
-        branchCode:    'SBS',
-        controllerDir: 'sorsogon',          // → ./controllers/sorsogon/
-        acnFolder:     '1ZlrquPeXvzaJdAk1bqBLLFPL6m1nqaKm',
-        prdFolder:     '1s2NS6sTQC8TgfHXEd7BU-fNjRAgaeXNF',
-        slsFolder:     '1cb2TKC7AgN8PhSvGZo9naZoQOCXeyDxt',
-    },
-    masbate: {
-        dbName:        'BCVR-MBS',
-        branchCode:    'MBS',
-        controllerDir: 'masbate',           // → ./controllers/masbate/
-        acnFolder:     '1lgz5m7pXQsS8u25V4tjIIlMU_ojQYaNY',
-        prdFolder:     '1AuxNUBHdiZUQLLOyzG7Lc66q6sJvRQFX',
-        slsFolder:     '11WnXyYB0OBX7HuRz_fdCSHQmvdHF9yHI',
-    },
-    iriga: {
-        dbName:        'BCVR-IBS',
-        branchCode:    'IBS',
-        controllerDir: 'iriga',             // → ./controllers/iriga/
-        acnFolder:     '1NYRzyrMh0y24051_9AaWLg45CHHMc4zL',
-        prdFolder:     '1geoGvNvDngTzlXD-LaE8PPyp5LwUG-3z',
-        slsFolder:     '1MgJDN1xhxypvLsb-CvlF-LhU_jLP6F8V',
-    },
+    catanduanes: {
+    label: "Catanduanes Branch (CBS)",
+    dbName: "BCVR-CBS",
+    branchCode: "CBS",
+    acnFolder: "1YatHY6HZzgxNqM6Tmsj9w-0_TGYP8TPB",
+    prdFolder: "172IN0fmXBe2VP_RHkrgnDVYocUFGcBeb",
+    slsFolder: "1rCRTIfQncjm5svX1zQTkWKp3CMy22zrg",
+  },
+  dw: {
+    label: "Distribution Warehouse (DW)",
+    dbName: "BCVR-DW",
+    branchCode: "DW",
+    acnFolder: "13O7nLrcMA-MV_bLJHrfG6ZZbQSS6n59p",
+    prdFolder: "1s2NS6sTQC8TgfHXEd7BU-fNjRAgaeXNF",
+    slsFolder: "14VG5m1l-B5eTemvK0ZXk6MqcXGwbX4Q4",
+  },
+  dds: {
+    label: "Distribution Display Store (DDS)",
+    dbName: "BCVR-DDS",
+    branchCode: "DDS",
+    acnFolder: "1vKy8WpmZfj4QOKdCnQiE_UWufAsOvBv_",
+    prdFolder: "172IN0fmXBe2VP_RHkrgnDVYocUFGcBeb",
+    slsFolder: "1R-1-l3BAzKe3W8wye9FHMOVYW0jBKFby",
+  },
+  phssn: {
+    label: "Pharmacy Sale Store Naga (PHSSN)",
+    dbName: "BCVR-PHSSN",
+    branchCode: "PHSSN",
+    acnFolder: "1DMHOI4Q5nxrrq1Y386U_NvWK9QRmhe0N",
+    prdFolder: "18_ipVF6W9kmk2hKV0V0yBRYC-GXrBPsn",
+    slsFolder: "13So2gjFcokEM23wud2TMDuqFY24pZpKf",
+  },
+  iriga: {
+    label: "Iriga Branch (IBS)",
+    dbName: "BCVR-IBS",
+    branchCode: "IBS",
+    acnFolder: "1NYRzyrMh0y24051_9AaWLg45CHHMc4zL",
+    prdFolder: "1geoGvNvDngTzlXD-LaE8PPyp5LwUG-3z",
+    slsFolder: "1MgJDN1xhxypvLsb-CvlF-LhU_jLP6F8V",
+  },
+  phssi: {
+    label: "Pharmacy Sale Store Iriga (PHSSI)",
+    dbName: "BCVR-PHSSI",
+    branchCode: "PHSSI",
+    acnFolder: "1PXPiIQbYAw44K_9Wd2LfF4myad2xkavd",
+    prdFolder: "1lfAyChAcgWhqUzzfxvrEEVYglZwAx6Rj",
+    slsFolder: "1_nKcXtf_jt4S6_dfb-YFxdRiff7iNSnS",
+  },
+  masbate: {
+    label: "Masbate Branch (MBS)",
+    dbName: "BCVR-MBS",
+    branchCode: "MBS",
+    acnFolder: "1lgz5m7pXQsS8u25V4tjIIlMU_ojQYaNY",
+    prdFolder: "1AuxNUBHdiZUQLLOyzG7Lc66q6sJvRQFX",
+    slsFolder: "11WnXyYB0OBX7HuRz_fdCSHQmvdHF9yHI",
+  },
+  sorsogon: {
+    label: "Sorsogon Branch (SBS)",
+    dbName: "BCVR-SBS",
+    branchCode: "SBS",
+    acnFolder: "1ZlrquPeXvzaJdAk1bqBLLFPL6m1nqaKm",
+    prdFolder: "1s2NS6sTQC8TgfHXEd7BU-fNjRAgaeXNF",
+    slsFolder: "1cb2TKC7AgN8PhSvGZo9naZoQOCXeyDxt",
+  },
+
 };
 
 // ─────────────────────────────────────────────
@@ -72,14 +113,14 @@ async function syncBranch(branchKey) {
 
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🤖 Auto-sync triggered — Branch: ${branchKey.toUpperCase()} | DB: ${config.dbName}`);
-    console.log(`📁 Controller folder: ./controllers/${config.controllerDir}/`);
+    console.log(`📁 Controller folder: ./controllers/${branchKey}/`);
     console.log(`⏰ Time: ${new Date().toLocaleString()}`);
     console.log(`${'='.repeat(60)}`);
 
     try {
         // 0. Load this branch's controllers
-        console.log(`\n🔧 Loading controllers for ${config.controllerDir}...`);
-        const { acn, prd, sls } = loadControllers(config.controllerDir);
+        console.log(`\n🔧 Loading controllers for ${branchKey}...`);
+        const { acn, prd, sls } = loadControllers(branchKey);
 
         // 1. Refresh Google Auth token
         console.log(`\n🔑 Refreshing Google Auth token...`);
@@ -157,7 +198,7 @@ cron.schedule(SCHEDULE, () => {
 // ─────────────────────────────────────────────
 console.log('\n🤖 BCVR Auto-Sync Service started.');
 console.log(`📅 Schedule: "${SCHEDULE}" (Asia/Manila / PST)`);
-console.log(`📋 Branches: ${Object.keys(BRANCHES).map(b => `${b} → controllers/${BRANCHES[b].controllerDir}/`).join(', ')}`);
+console.log(`📋 Branches: ${Object.keys(BRANCHES).map(b => `${b} → controllers/${b}/`).join(', ')}`);
 console.log(`⏰ Starting initial sync now...\n`);
 
 syncAllBranches().catch(err => {

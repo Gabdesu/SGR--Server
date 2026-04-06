@@ -7,14 +7,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // --- BRANCH METADATA MAP ---
 const BRANCH_META = {
-    SBS: { prefix: 'SGR_ACN_SBS', label: 'Sorsogon Branch Store' },
-    MBS: { prefix: 'SGR_ACN_MBS', label: 'Masbate Branch Store'  },
-    IBS: { prefix: 'SGR_ACN_IBS', label: 'Iriga Branch Store'    },
-    DW:  { prefix: 'SGR_ACN_DW',  label: 'Distribution Warehouse'},
-    DDS: { prefix: 'SGR_ACN_DDS', label: 'Distribution Display Store' },
-    PHSSN:  { prefix: 'SGR_ACN_PHSSN',  label: 'Pharmacy & Health Supplies Store Naga'},
-    PHSSI:  { prefix: 'SGR_ACN_PHSSI',  label: 'Pharmacy & Health Supplies Store Iriga'},
-    CBS:  { prefix: 'SGR_ACN_CBS',  label: 'Catanduanes Branch Store'},
+    PHSSN:  { prefix: 'SGR_ACN_PHSSN',  label: 'Pharmacy & Health Supplies Store Naga'}
 };
 
 const MONTH_LABELS = [
@@ -26,8 +19,8 @@ const MONTH_LABELS = [
 
 // --- HELPER: FIND SPREADSHEET BY CURRENT MONTH NAME ---
 async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
-    const meta  = BRANCH_META[branchCode] || BRANCH_META['DDS'];
-
+    const meta  = BRANCH_META[branchCode] || BRANCH_META['PHSSN'];
+    const now = new Date()
     // Target LAST month (mirrors config.js buildLastMonthRange logic)
     const year  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1; // 0-indexed for MONTH_LABELS
