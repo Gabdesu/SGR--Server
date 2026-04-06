@@ -59,268 +59,408 @@ async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
 
 // --- SQL QUERY REPOSITORY ---
 const queries = {
-    'Fast Moving (Meds)': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT TOP 100
-            CASE WHEN MAX(TBL_Category_File.group_ID) = 1 AND LEN(MAX(I.Item_Name)) > 4
-                 THEN LEFT(MAX(I.Item_Name), LEN(MAX(I.Item_Name)) - 4)
-                 ELSE MAX(I.Item_Name) END AS Product,
-            COUNT(O.order_no) AS "Freq.",
-            SUM(CASE WHEN order_type LIKE '%Sales%' AND order_type NOT LIKE '%Transfer%' THEN QTY ELSE 0 END) AS Quantity,
-            MAX(Item_Packaging) AS Packaging
-        FROM TBL_Orders_Detail OD
-        INNER JOIN tbl_orders O ON O.Order_No = OD.Order_No
-        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-        INNER JOIN TBL_Category_File ON TBL_Category_File.Catg_ID = I.Catg_ID
-        WHERE TBL_Category_File.group_ID = 1
-          AND Order_Type LIKE '%Sales%'
-          AND (CASE WHEN Encode_DateTime IS NULL OR Encode_DateTime = ''
-                    THEN CONVERT(DATE, Order_Date)
-                    ELSE CONVERT(DATE, Encode_DateTime) END) BETWEEN @StartDate AND @EndDate
-        GROUP BY CASE WHEN LEN(I.Item_Name) > 4 THEN LEFT(I.Item_Name, LEN(I.Item_Name) - 4) ELSE I.Item_Name END
-        ORDER BY COUNT(O.order_no) DESC`,
+    // Retrieves the top 100 medicine items with the highest transaction frequency
+  "Fast Moving (Meds)": `
+      DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
 
-    'Fast Moving (Supplies)': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT TOP 100
-            CASE WHEN MAX(TBL_Category_File.group_ID) = 1 AND LEN(MAX(I.Item_Name)) > 4
-                 THEN LEFT(MAX(I.Item_Name), LEN(MAX(I.Item_Name)) - 4)
-                 ELSE MAX(I.Item_Name) END AS Product,
-            COUNT(O.order_no) AS "Freq.",
-            SUM(CASE WHEN order_type LIKE '%Sales%' AND order_type NOT LIKE '%Transfer%' THEN QTY ELSE 0 END) AS Quantity,
-            MAX(Item_Packaging) AS Packaging
-        FROM TBL_Orders_Detail OD
-        INNER JOIN tbl_orders O ON O.Order_No = OD.Order_No
-        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-        INNER JOIN TBL_Category_File ON TBL_Category_File.Catg_ID = I.Catg_ID
-        WHERE TBL_Category_File.group_ID = 2
-          AND Order_Type LIKE '%Sales%'
-          AND (CASE WHEN Encode_DateTime IS NULL OR Encode_DateTime = ''
-                    THEN CONVERT(DATE, Order_Date)
-                    ELSE CONVERT(DATE, Encode_DateTime) END) BETWEEN @StartDate AND @EndDate
-        GROUP BY CASE WHEN LEN(I.Item_Name) > 4 THEN LEFT(I.Item_Name, LEN(I.Item_Name) - 4) ELSE I.Item_Name END
-        ORDER BY COUNT(O.order_no) DESC`,
+    select top 100
+case when max(group_ID) = 1 then 
+	LEFT(TBL_Category_Item_File.Item_Name, LEN(TBL_Category_Item_File.Item_Name) -4) 
+	else max(TBL_Category_Item_File.Item_Name) end as Product, 
+COUNT(tbL_orders.order_no) as Freq, 
+SUM(case when order_type like '%Sales%' and order_type Not like '%Transfer%' then QTY else 0 end) as Quantity,
+MAX(Item_Packaging) as Packaging
+		from TBL_Orders_Detail
+		inner join tbl_orders on TBL_Orders.Order_No = TBL_Orders_Detail.Order_No
+		inner join TBL_Category_Item_File on TBL_Category_Item_File.Item_ID = TBL_Orders_Detail.Item_ID
+		inner join TBL_Category_File on TBL_Category_File.Catg_ID = TBL_Category_Item_File.Catg_ID
+where group_id = 1 and Order_Type like '%Sales%'
+and Order_Type not like '%Transfer%'
+AND CASE
+        WHEN Encode_DateTime IS NULL OR Encode_DateTime = ''
+            THEN CONVERT(DATE, Order_Date)
+        ELSE CONVERT(DATE, Encode_DateTime)
+    END
+BETWEEN @StartDate
+    AND @EndDate
+--and Item_Preparation in (
+--SELECT PrepType FROM @Preparation
+--)
+group by LEFT(TBL_Category_Item_File.Item_Name, LEN(TBL_Category_Item_File.Item_Name) -4)
+order by Freq desc`,
 
-    'Procurement': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT
-            NULL AS Encode,
-            NULL AS Entity,
-            DATEDIFF(day, O.Order_Date, @EndDate) AS "Days Lacking",
-            I.Item_Name AS Product,
-            NULL AS Brand,
-            SUM(OD.QTY) AS Quantity,
-            I.Item_Packaging AS Packaging,
-            I.Item_Org_Price AS "Unit Cost",
-            (SUM(OD.QTY) * I.Item_Org_Price) AS Total,
-            'Lacking' AS Status
-        FROM TBL_Orders_Detail OD
-        INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-        WHERE OD.QTY > 0
-          AND O.Order_Date BETWEEN @StartDate AND @EndDate
-        GROUP BY I.Item_Name, I.Item_Packaging, I.Item_Org_Price, O.Order_Date
-        ORDER BY DATEDIFF(day, O.Order_Date, @EndDate) DESC`,
+  // Retrieves the top 100 medical supplies with the highest transaction frequency
+  "Fast Moving (Supplies)": `
+   DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
 
-    'Procurement-Special': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT
-            NULL AS Encode,
-            NULL AS Entity,
-            DATEDIFF(day, O.Order_Date, @EndDate) AS DaysLacking,
-            I.Item_Name AS Product,
-            NULL AS Brand,
-            SUM(OD.QTY) AS Quantity,
-            I.Item_Packaging AS Packaging,
-            I.Item_Org_Price AS "Unit Cost",
-            SUM(OD.QTY * I.Item_Org_Price) AS Total,
-            'Special Case' AS Status
-        FROM TBL_Orders_Detail OD
-        INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-        WHERE OD.QTY > 0
-          AND O.Order_Date BETWEEN @StartDate AND @EndDate
-          AND I.Catg_ID IN (SELECT Catg_ID FROM TBL_Category_File WHERE group_ID = 3)
-        GROUP BY I.Item_Name, I.Item_Packaging, I.Item_Org_Price, O.Order_Date
-        ORDER BY DATEDIFF(day, O.Order_Date, @EndDate) DESC`,
+    select top 100
+case when max(group_ID) = 1 then 
+	LEFT(TBL_Category_Item_File.Item_Name, LEN(TBL_Category_Item_File.Item_Name) -4) 
+	else max(TBL_Category_Item_File.Item_Name) end as Product, 
+COUNT(tbL_orders.order_no) as Freq, 
+SUM(case when order_type like '%Sales%' and order_type Not like '%Transfer%' then QTY else 0 end) as Quantity,
+MAX(Item_Packaging) as Packaging
+		from TBL_Orders_Detail
+		inner join tbl_orders on TBL_Orders.Order_No = TBL_Orders_Detail.Order_No
+		inner join TBL_Category_Item_File on TBL_Category_Item_File.Item_ID = TBL_Orders_Detail.Item_ID
+		inner join TBL_Category_File on TBL_Category_File.Catg_ID = TBL_Category_Item_File.Catg_ID
+where group_id = 2 and Order_Type like '%Sales%'
+and Order_Type not like '%Transfer%'
+AND CASE
+        WHEN Encode_DateTime IS NULL OR Encode_DateTime = ''
+            THEN CONVERT(DATE, Order_Date)
+        ELSE CONVERT(DATE, Encode_DateTime)
+    END
+BETWEEN @StartDate
+    AND @EndDate
+--and Item_Preparation in (
+--SELECT PrepType FROM @Preparation
+--)
+group by LEFT(TBL_Category_Item_File.Item_Name, LEN(TBL_Category_Item_File.Item_Name) -4)
+order by Freq desc`,
 
-    'Slow Moving': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT
-            I.Item_Name AS Product,
-            S.Item_QTY AS Quantity,
-            I.Item_Packaging AS Packaging
-        FROM TBL_Category_Item_File I
-        INNER JOIN TBL_Stocks_Balances S ON I.Item_ID = S.Item_ID
-        WHERE S.Item_QTY > 0
-          AND I.Item_ID NOT IN (
-              SELECT DISTINCT OD.Item_ID
-              FROM TBL_Orders_Detail OD
-              INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-              WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
-          )
-        ORDER BY S.Item_QTY DESC`,
+  // Lists unfulfilled orders that need procurement action
+  Procurement: `
+   DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
 
-    'Out of Stocks': `
-        SELECT DISTINCT
-            I.Item_Name AS Product,
-            S.Item_QTY AS Quantity,
-            I.Item_Packaging AS Packaging,
-            I.Item_Org_Price AS "Price",
-            (S.Item_QTY * I.Item_Org_Price) AS "Total"
-        FROM TBL_Category_Item_File I
-        INNER JOIN TBL_Stocks_Balances S ON I.Item_ID = S.Item_ID
-        WHERE S.Item_QTY > 0
-          AND S.Item_QTY <= 2
-        ORDER BY S.Item_QTY ASC`,
+    SELECT
+    OL_BookingDate,
+    OL_Entity AS 'Entity',
+    DATEDIFF(DAY, OL_BookingDate, @EndDate) as Days_Lacking,
+    Item_Description AS 'Product',
+    Item_Brand AS 'Brand',
+    Quantity,
+    Item_Packaging,
+    Unit_Cost 'Unit Cost',
+    Unit_Total AS 'Total',
+    Item_Status AS Status
+FROM TBL_Orders_Lacking_Details
+INNER JOIN TBL_Orders_Lacking
+    ON TBL_Orders_Lacking.OL_ID = TBL_Orders_Lacking_Details.OL_ID
+WHERE
+    (Item_Status != 'Served'
+     AND Item_Status != 'Changed Item'
+     AND Item_Status != 'Waived')
+    and OL_BookingDate <= @EndDate
+ORDER BY Item_Description;
 
-    'Discounted (Loyalty)': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT
-            I.Item_Name                 AS "Product Name",
-            SUM(OD.QTY)                 AS Quantity,
-            I.Item_Packaging            AS Packaging,
-            AVG(OD.Disc_Price)          AS "Discounted Price",
-            AVG(OD.Orig_Price)          AS "Original Price",
-            SUM(OD.Disc_Price * OD.QTY) AS "Total Discounted",
-            SUM(OD.Orig_Price * OD.QTY) AS "Total Original"
-        FROM TBL_Orders_Detail OD
-        INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-        WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
-          AND OD.isLoyalty = 'Yes'
-        GROUP BY I.Item_Name, I.Item_Packaging, I.Item_ID
-        ORDER BY SUM(OD.Disc_Price * OD.QTY) DESC`,
+`,
 
-    'Discounted (Senior)': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT
-            I.Item_Name                 AS "Product Name",
-            SUM(OD.QTY)                 AS Quantity,
-            I.Item_Packaging            AS Packaging,
-            AVG(OD.Disc_Price)          AS "Discounted Price",
-            AVG(OD.Orig_Price)          AS "Original Price",
-            SUM(OD.Disc_Price * OD.QTY) AS "Total Discounted",
-            SUM(OD.Orig_Price * OD.QTY) AS "Total Original"
-        FROM TBL_Orders_Detail OD
-        INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-        WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
-          AND OD.isSenior = 'Yes'
-        GROUP BY I.Item_Name, I.Item_Packaging, I.Item_ID
-        ORDER BY SUM(OD.Disc_Price * OD.QTY) DESC`,
+  // Lists unfulfilled orders specifically marked as Changed or Waived
+  "Procurement-Special": `
+   DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
 
-    'Expired': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT
-            I.Item_Name                 AS "Product Name",
-            OD.Lot_No                   AS "Lot Number",
-            OD.Exp_Date AS "Exp. Date",
-            I.Item_Org_Price AS Capital,
-            (OD.QTY * I.Item_Org_Price) AS Total,
-            OD.QTY AS Quantity
-        FROM TBL_Orders_Detail OD
-        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-        WHERE OD.QTY > 0
-          AND TRY_CAST(OD.Exp_Date AS DATE) BETWEEN @StartDate AND @EndDate
-        ORDER BY TRY_CAST(OD.Exp_Date AS DATE) ASC`,
+    SELECT
+    OL_BookingDate,
+    OL_Entity AS 'Entity',
+    DATEDIFF(DAY, OL_BookingDate, @EndDate) as Days_Lacking,
+    Item_Description AS 'Product',
+    Item_Brand AS 'Brand',
+    Quantity,
+    Item_Packaging,
+    Unit_Cost 'Unit Cost',
+    Unit_Total AS 'Total',
+    Item_Status AS Status
+FROM TBL_Orders_Lacking_Details
+INNER JOIN TBL_Orders_Lacking
+    ON TBL_Orders_Lacking.OL_ID = TBL_Orders_Lacking_Details.OL_ID
+WHERE
+    (Item_Status = 'Changed Item'
+     AND Item_Status = 'Waived')
+    and OL_BookingDate <= @EndDate
+ORDER BY Item_Description;
+`,
 
-    'Near Expiry': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT
-            I.Item_Name                AS "Product Name",
-            OD.Lot_No                   AS "Lot Number",
-            OD.Exp_Date AS "Exp. Date",
-            I.Item_Org_Price AS Capital,
-            (OD.QTY * I.Item_Org_Price) AS Total,
-            OD.QTY AS Quantity
-        FROM TBL_Orders_Detail OD
-        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-        WHERE TRY_CAST(OD.Exp_Date AS DATE) BETWEEN @StartDate AND @EndDate
-          AND OD.QTY > 0
-        ORDER BY TRY_CAST(OD.Exp_Date AS DATE) ASC`,
+  // Identifies stock on hand that has zero sales within the selected date range
+  "Slow Moving": `
+   DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
 
-    'Top Peso Sold (Meds)': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT
-            I.Item_Name AS "Product Name",
-            OD.Lot_No AS "Lot Number",
-            OD.Exp_Date AS "Exp. Date",
-            SUM(OD.QTY * CASE WHEN OD.Disc_Price > 0 THEN OD.Disc_Price ELSE I.Item_Org_Price END) AS Total
-        FROM TBL_Orders_Detail OD
-        INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-        WHERE I.Catg_ID IN (392979, 564572, 91602, 81593)
-          AND O.Order_Type LIKE '%Sorsogon%'
-          AND CAST(O.Order_Date AS DATE) BETWEEN @StartDate AND @EndDate
-        GROUP BY I.Item_Name, OD.Lot_No, OD.Exp_Date
-        ORDER BY SUM(OD.QTY * CASE WHEN OD.Disc_Price > 0 THEN OD.Disc_Price ELSE I.Item_Org_Price END) DESC`,
+    SELECT
+        I.Item_Name AS Product,
+        S.Item_QTY AS Quantity,
+        I.Item_Packaging AS Packaging
+    FROM TBL_Category_Item_File I
+    INNER JOIN TBL_Stocks_Balances S ON I.Item_ID = S.Item_ID
+    WHERE S.Item_QTY > 0
+      AND I.Item_ID NOT IN (
+          SELECT DISTINCT OD.Item_ID
+          FROM TBL_Orders_Detail OD
+          INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
+          WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
+      )
+    ORDER BY S.Item_QTY DESC`,
 
-    'Top Peso Sold (Supplies)': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        SELECT
-            I.Item_Name AS "Product Name",
-            OD.Lot_No AS "Lot Number",
-            OD.Exp_Date AS "Exp. Date",
-            SUM(OD.QTY * CASE WHEN OD.Disc_Price > 0 THEN OD.Disc_Price ELSE I.Item_Org_Price END) AS Total
-        FROM TBL_Orders_Detail OD
-        INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
-        INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
-        WHERE I.Catg_ID IN (272586, 322690, 202276, 91931, 101946, 91901, 493490, 91936, 91908)
-          AND O.Order_Type LIKE '%Sorsogon%'
-          AND CAST(O.Order_Date AS DATE) BETWEEN @StartDate AND @EndDate
-        GROUP BY I.Item_Name, OD.Lot_No, OD.Exp_Date
-        ORDER BY SUM(OD.QTY * CASE WHEN OD.Disc_Price > 0 THEN OD.Disc_Price ELSE I.Item_Org_Price END) DESC`,
+  // Lists items where stock levels are critically low (2 units or less)
+  "Out of Stocks": `
+    SELECT DISTINCT
+        I.Item_Name AS Product,
+        S.Item_QTY AS Quantity,
+        I.Item_Packaging AS Packaging,
+        I.Item_Org_Price AS "Price",
+        (S.Item_QTY * I.Item_Org_Price) AS "Total"
+    FROM TBL_Category_Item_File I
+    INNER JOIN TBL_Stocks_Balances S ON I.Item_ID = S.Item_ID
+    WHERE S.Item_QTY > 0
+      AND S.Item_QTY <= 2
+    ORDER BY S.Item_QTY ASC`,
 
-    'High Peso Value': `
-        SELECT
-            CASE WHEN I.Catg_ID IN (392979, 564572, 91602, 101990, 81593)
-                 THEN 'MEDICINES' ELSE 'SUPPLIES' END AS Type,
-            I.Item_Name         AS "Product Name",
-            S.Item_QTY          AS Qty,
-            I.Item_Org_Price    AS Capital,
-            I.Item_WS_With_OR   AS Distribution,
-            I.Item_Retail_Price AS Retail
-        FROM TBL_Category_Item_File I
-        INNER JOIN TBL_Stocks_Balances S ON I.Item_ID = S.Item_ID
-        WHERE S.Item_QTY > 0
-          AND I.Catg_ID IN (392979, 564572, 91602, 101990, 81593,
-                            272586, 322690, 202276, 91931, 101946,
-                            91901, 493490, 91936, 91908)
-        ORDER BY 1 ASC, I.Item_Org_Price DESC`,
-
-    'Lacking Served': `
+  // Summarizes sales and price variance for items sold under Loyalty discounts
+  "Discounted (Loyalty)": `
     DECLARE @StartDate DATE = '${DATE.sql.start}';
     DECLARE @EndDate   DATE = '${DATE.sql.end}';
+
     SELECT
-        'GPFS'           AS "Sales Category",
-        O.Order_No       AS "Order No",
-        OOS.OS_Client    AS "Entity",
-        OOS.OS_OrderType AS "PO Details",
-        I.Item_ID        AS "Item No",
-        I.Item_Name      AS "Product Name",
-        O.Order_Remarks  AS "Lacking Description",
-        OOS.OS_Quantity  AS "Order Quantity",
-        OOS.OS_Quantity  AS "Lacking Quantity",
-        ''               AS "Purchasing Assigned",
-        O.Encoded_By     AS "Encoder"
-    FROM TBL_OutOfStock_Lacking OOS
-    INNER JOIN TBL_Category_Item_File I ON OOS.OS_ID = I.Item_ID
-    LEFT  JOIN TBL_Orders O ON OOS.OS_Client = O.Client_Name
-    WHERE OOS.OS_OrderType LIKE '%Sorsogon%'
-      AND OOS.OS_Date BETWEEN @StartDate AND @EndDate
-    ORDER BY OOS.OS_Date DESC`,
+        I.Item_Name AS "Product Name",
+        SUM(OD.QTY) AS Quantity,
+        I.Item_Packaging AS Packaging,
+        AVG(OD.Disc_Price) AS "Discounted Price",
+        AVG(OD.Orig_Price) AS "Original Price",
+        SUM(OD.Disc_Price * OD.QTY) AS "Total Discounted",
+        SUM(OD.Orig_Price * OD.QTY) AS "Total Original"
+    FROM TBL_Orders_Detail OD
+    INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
+    INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
+    WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
+      AND OD.isLoyalty = 'Yes'
+    GROUP BY I.Item_Name, I.Item_Packaging, I.Item_ID
+    ORDER BY SUM(OD.Disc_Price * OD.QTY) DESC`,
+
+  // Summarizes sales and price variance for items sold under Senior Citizen discounts
+  "Discounted (Senior)": `
+    DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
+
+    SELECT
+        I.Item_Name AS "Product Name",
+        SUM(OD.QTY) AS Quantity,
+        I.Item_Packaging AS Packaging,
+        AVG(OD.Disc_Price) AS "Discounted Price",
+        AVG(OD.Orig_Price) AS "Original Price",
+        SUM(OD.Disc_Price * OD.QTY) AS "Total Discounted",
+        SUM(OD.Orig_Price * OD.QTY) AS "Total Original"
+    FROM TBL_Orders_Detail OD
+    INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
+    INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
+    WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
+      AND OD.isSenior = 'Yes'
+    GROUP BY I.Item_Name, I.Item_Packaging, I.Item_ID
+    ORDER BY SUM(OD.Disc_Price * OD.QTY) DESC`,
+
+  // Identifies items in stock that have already passed their expiration date
+  Expired: `
+    SELECT 
+        CONCAT(I.Item_Name, ' ', C.Catg_Name) AS Item_Name,
+        CASE 
+            WHEN LEFT(I.Item_Description, 4) = 'BCVR' THEN '-' 
+            ELSE I.Item_Description 
+        END AS Item_Description,
+        REPLACE(FORMAT(I.Item_Exp_Date, 'MM/yyyy'), '01/2040', '-') AS Item_Exp_Date,
+        I.Item_Price AS Capital,
+        I.Item_Price * S.Item_QTY AS Total,
+        CONCAT(S.Item_QTY, ' ', I.Item_packaging) AS Quantity
+    FROM TBL_Category_Item_File I
+    INNER JOIN TBL_Stocks_Balances S ON S.Item_ID = I.Item_ID
+    INNER JOIN TBL_Category_File C ON C.Catg_ID = I.Catg_ID
+    WHERE I.Item_Exp_Date <= CAST(EOMONTH(DATEADD(MONTH, -1, GETDATE())) AS DATETIME)
+      AND S.Item_QTY > 0
+    ORDER BY I.Item_Exp_Date, Item_Name`,
+
+  // Lists items expiring within the next 10 months
+  "Near Expiry": `
+    SELECT 
+        CONCAT(I.Item_Name, ' ', C.Catg_Name) AS Item_Name,
+        CASE 
+            WHEN LEFT(I.Item_Description, 4) = 'BCVR' THEN '-' 
+            ELSE I.Item_Description 
+        END AS Item_Description,
+        REPLACE(FORMAT(I.Item_Exp_Date, 'MM/yyyy'), '01/2040', '-') AS Item_Exp_Date,
+        I.Item_Price AS Capital,
+        I.Item_Price * S.Item_QTY AS Total,
+        CONCAT(S.Item_QTY, ' ', I.Item_packaging) AS Quantity
+    FROM TBL_Category_Item_File I
+    INNER JOIN TBL_Stocks_Balances S ON S.Item_ID = I.Item_ID
+    INNER JOIN TBL_Category_File C ON C.Catg_ID = I.Catg_ID
+    WHERE I.Item_Exp_Date <= CAST(EOMONTH(DATEADD(MONTH, 10, GETDATE())) AS DATETIME)
+      AND S.Item_QTY > 0
+    ORDER BY I.Item_Exp_Date, Item_Name`,
+
+  // Ranks the top 100 medicines based on total sales value (Peso)
+  "Top Peso Sold (Meds)": `
+    DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
+
+    SELECT TOP 100
+        CONCAT(Item_Name, ' ', Catg_Name) AS Product,
+        SUM(QTY) AS Quantity,
+        MAX(Item_Packaging) AS Packaging,
+        SUM(total_Cost) AS Total
+    FROM TBL_Orders_Detail OD
+    INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
+    INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
+    INNER JOIN TBL_Category_File C ON C.Catg_ID = I.Catg_ID
+    WHERE C.group_id = 1 
+      AND O.Order_Type LIKE '%Sales%'
+      AND O.Order_Type NOT LIKE '%Transfer%'
+      AND (CASE 
+            WHEN Encode_DateTime IS NULL OR Encode_DateTime = '' THEN CONVERT(DATE, Order_Date)
+            ELSE CONVERT(DATE, Encode_DateTime) 
+          END) BETWEEN @StartDate AND @EndDate
+    GROUP BY CONCAT(Item_Name, ' ', Catg_Name)
+    ORDER BY SUM(total_Cost) DESC`,
+
+  // Ranks the top 100 supplies based on total sales value (Peso)
+  "Top Peso Sold (Supplies)": `
+    DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
+
+    SELECT TOP 100
+        CONCAT(Item_Name, ' ', Catg_Name) AS Product,
+        SUM(QTY) AS Quantity,
+        MAX(Item_Packaging) AS Packaging,
+        SUM(total_Cost) AS Total
+    FROM TBL_Orders_Detail OD
+    INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
+    INNER JOIN TBL_Category_Item_File I ON I.Item_ID = OD.Item_ID
+    INNER JOIN TBL_Category_File C ON C.Catg_ID = I.Catg_ID
+    WHERE C.group_id = 2 
+      AND O.Order_Type LIKE '%Sales%'
+      AND O.Order_Type NOT LIKE '%Transfer%'
+      AND (CASE 
+            WHEN Encode_DateTime IS NULL OR Encode_DateTime = '' THEN CONVERT(DATE, Order_Date)
+            ELSE CONVERT(DATE, Encode_DateTime) 
+          END) BETWEEN @StartDate AND @EndDate
+    GROUP BY CONCAT(Item_Name, ' ', Catg_Name)
+    ORDER BY SUM(total_Cost) DESC`,
+
+  // Identifies high-investment inventory items (Meds & Supplies separately)
+  "High Peso Value": `
+    /* Section 1: Medicines (Group ID 1) */
+    SELECT TOP 30
+        ROW_NUMBER() OVER (ORDER BY SUM(I.Item_Price * S.Item_QTY) DESC) AS Number,
+        CONCAT(Item_Name, ' ', Catg_Name) AS Item_Name,
+        CONCAT(SUM(S.Item_QTY), ' ', MAX(Item_packaging)) AS Qty,
+        SUM(I.Item_Price * S.Item_QTY) AS 'Capital_Price',
+        SUM(I.Item_Distribution * S.Item_QTY) AS 'Distribution_Price',
+        SUM(I.Item_Retail_Price * S.Item_QTY) AS 'Retail_Price'
+    FROM TBL_Category_Item_File I
+    INNER JOIN TBL_Stocks_Balances S ON S.Item_ID = I.Item_ID
+    INNER JOIN TBL_Category_File C ON C.Catg_ID = I.Catg_ID
+    WHERE Group_ID = '1'
+    GROUP BY CONCAT(Item_Name, ' ', Catg_Name)
+    ORDER BY Capital_Price DESC;
+
+    /* Section 2: Non-Medicines (Group ID != 1) */
+    SELECT TOP 30
+        ROW_NUMBER() OVER (ORDER BY SUM(I.Item_Price * S.Item_QTY) DESC) AS Number,
+        CONCAT(Item_Name, ' ', Catg_Name) AS Item_Name,
+        CONCAT(SUM(S.Item_QTY), ' ', MAX(Item_packaging)) AS Qty,
+        SUM(I.Item_Price * S.Item_QTY) AS 'Capital_Price',
+        SUM(I.Item_Distribution * S.Item_QTY) AS 'Distribution_Price',
+        SUM(I.Item_Retail_Price * S.Item_QTY) AS 'Retail_Price'
+    FROM TBL_Category_Item_File I
+    INNER JOIN TBL_Stocks_Balances S ON S.Item_ID = I.Item_ID
+    INNER JOIN TBL_Category_File C ON C.Catg_ID = I.Catg_ID
+    WHERE Group_ID != '1'
+    GROUP BY CONCAT(Item_Name, ' ', Catg_Name)
+    ORDER BY Capital_Price DESC;`,
+
+  // Tracks Government orders and provides details on what was unfulfilled/lacking
+  "Lacking Served": `
+    DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
+
+    SELECT 
+        MAX(LEFT(Order_type, 4)) AS Order_type,
+        MAX(OD.Order_No) AS Order_No,
+        MAX(Client_Name) AS Entity, 
+        MAX(Client_Terms) AS PO_Details,
+        MAX(OD.OrderDetail_ItemNo) AS Item_No,
+        OD.Product_Name,
+        MAX(LD.Item_Description) AS Lacking_Description,
+        MAX(OD.QTY) AS Order_Quantity,
+        SUM(LD.Quantity) AS Lacking_Quantity,
+        MAX(OL_Purchasing) AS Purchasing_Assigned,
+        MAX(OL_Encoder) AS Encoder
+    FROM TBL_Orders_Detail OD
+    INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
+    INNER JOIN TBL_Orders_Lacking L ON L.Order_No = OD.Order_No
+    INNER JOIN TBL_Orders_Lacking_Details LD ON LD.OL_ID = L.OL_ID
+    WHERE (CASE 
+            WHEN Encode_DateTime IS NULL OR Encode_DateTime = '' THEN CONVERT(DATE, Order_Date)
+            ELSE CONVERT(DATE, Encode_DateTime) 
+          END) BETWEEN @StartDate AND @EndDate
+      AND Order_Type LIKE '%GOVT%'
+      AND Item_No = OrderDetail_ItemNo
+    GROUP BY Order_Dtl, OD.Product_Name`,
+
+  // Finds items received for a specific purpose (non-refill) that haven't been sold yet
+  "Remained Stock For Serve": `
+    DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
+
+    SELECT Received_Date, Item_ProductName, PO_Name, Lot_No, Exp_Date, S.Item_QTY, Packaging, PurchasePurpose 
+    FROM TBL_Stocks_Balances S
+    INNER JOIN TBL_Purchase_Detail PD ON PD.Item_ID = S.Item_ID
+    INNER JOIN TBL_Purchase_Order PO ON PO.Purchase_ID = PD.Purchase_ID
+    INNER JOIN TBL_Suppliers SP ON SP.Supp_ID = PO.Supp_ID
+    WHERE PurchasePurpose NOT LIKE '%Refill%'
+      AND SuppName NOT LIKE '%BCVR%'
+      AND Received_Date BETWEEN @StartDate AND @EndDate
+      AND PurchasePurpose != ''
+      AND S.Item_QTY > 0
+      AND Item_ProductName NOT IN (
+          SELECT Product_Name FROM TBL_Orders_Detail OD
+          INNER JOIN TBL_Orders O ON O.Order_No = OD.Order_No
+          WHERE (CASE 
+                  WHEN Encode_DateTime IS NULL OR Encode_DateTime = '' THEN CONVERT(DATE, Order_Date)
+                  ELSE CONVERT(DATE, Encode_DateTime) 
+                END) BETWEEN @StartDate AND @EndDate
+      )
+    ORDER BY Received_Date`,
+
+  // Audits purchase orders to find items that were delivered but had quantities lower than ordered
+  "Purchase Order Items Audit": `
+    DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
+
+    SELECT POI.PO_No, Supplier_Name, Delivery_Status, Item_Availability, Item_Status, Item_Description, Order_Qty, Recv_Qty, Unit_Cost, Recv_Price, Total_Cost, Recv_Total, Prepared_by 
+    FROM TBL_Purchase_Order_Items POI
+    INNER JOIN TBL_Purchase_Order_Tracking POT ON POT.PO_No = POI.PO_No
+    WHERE Delivery_Status = 'Complete'
+      AND Item_Availability = 'Available'
+      AND Order_Qty > Recv_Qty
+      AND POI.PO_No IN (
+          SELECT PurchaseOrder_No FROM TBL_Purchase_Order
+          WHERE Received_Date BETWEEN @StartDate AND @EndDate
+      )
+    ORDER BY Item_Description`,
+
+  // Analyzes associations between products and unfulfilled government orders
+  "Brand Association": `
+    DECLARE @StartDate DATE = '${DATE.sql.start}';
+    DECLARE @EndDate   DATE = '${DATE.sql.end}';
+
+   SELECT 
+    Catg_Name,
+    MAX(Manufacturer) AS Manufacturer,
+    MAX(Distributor) AS Distributor,
+    MAX(Trader) AS Trader,
+    MAX(Importer) AS Importer
+FROM TBL_Category_File
+INNER JOIN TBL_Category_Item_File ON TBL_Category_Item_File.Catg_ID = TBL_Category_File.Catg_ID
+INNER JOIN TBL_Purchase_Detail ON TBL_Purchase_Detail.Item_ID = TBL_Category_Item_File.Item_ID
+INNER JOIN TBL_Purchase_Order ON TBL_Purchase_Order.Purchase_ID = TBL_Purchase_Detail.Purchase_ID
+INNER JOIN TBL_Suppliers ON TBL_Suppliers.Supp_ID = TBL_Purchase_Order.Supp_ID
+WHERE 
+    SuppName NOT LIKE '%BCVR%'
+    AND Received_Date BETWEEN @StartDate AND @EndDate
+    AND Group_ID = 1
+GROUP BY Catg_Name;`,
 };
 
 // --- FORMATTING HELPERS ---

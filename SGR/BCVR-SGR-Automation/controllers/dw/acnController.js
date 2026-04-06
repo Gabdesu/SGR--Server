@@ -1,146 +1,159 @@
-const { google } = require('googleapis');
-const { auth, DATE } = require('../../config');
+const { google } = require("googleapis");
+const { auth, DATE } = require("../../config");
 
-const sheetsApi = google.sheets({ version: 'v4', auth });
-const driveApi = google.drive({ version: 'v3', auth });
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const sheetsApi = google.sheets({ version: "v4", auth });
+const driveApi = google.drive({ version: "v3", auth });
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // --- BRANCH METADATA MAP ---
 const BRANCH_META = {
-    SBS: { prefix: 'SGR_ACN_SBS', label: 'Sorsogon Branch Store' },
-    MBS: { prefix: 'SGR_ACN_MBS', label: 'Masbate Branch Store'  },
-    IBS: { prefix: 'SGR_ACN_IBS', label: 'Iriga Branch Store'    },
-    DW:  { prefix: 'SGR_ACN_DW',  label: 'Distribution Warehouse'},
+  SBS: { prefix: "SGR_ACN_SBS", label: "Sorsogon Branch Store" },
+  MBS: { prefix: "SGR_ACN_MBS", label: "Masbate Branch Store" },
+  IBS: { prefix: "SGR_ACN_IBS", label: "Iriga Branch Store" },
+  DW: { prefix: "SGR_ACN_DW", label: "Distribution Warehouse" },
 };
 
 const MONTH_LABELS = [
-    ['JAN', 'January'],  ['FEB', 'February'], ['MAR', 'March'],
-    ['APR', 'April'],    ['MAY', 'May'],       ['JUN', 'June'],
-    ['JUL', 'July'],     ['AUG', 'August'],    ['SEP', 'September'],
-    ['OCT', 'October'],  ['NOV', 'November'],  ['DEC', 'December'],
+  ["JAN", "January"],
+  ["FEB", "February"],
+  ["MAR", "March"],
+  ["APR", "April"],
+  ["MAY", "May"],
+  ["JUN", "June"],
+  ["JUL", "July"],
+  ["AUG", "August"],
+  ["SEP", "September"],
+  ["OCT", "October"],
+  ["NOV", "November"],
+  ["DEC", "December"],
 ];
 
 // --- HELPER: FIND SPREADSHEET BY CURRENT MONTH NAME ---
 async function getSpreadsheetIdForCurrentMonth(folderId, branchCode) {
-    const meta  = BRANCH_META[branchCode] || BRANCH_META['DW'];
-    
-    // Target LAST month (mirrors config.js buildLastMonthRange logic)
-    const year  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-    const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1; // 0-indexed for MONTH_LABELS
-    const [shortMon, longMon] = MONTH_LABELS[month];
+  const meta = BRANCH_META[branchCode] || BRANCH_META["DW"];
 
-    const currentFileName = `BCVR [${meta.prefix}_${shortMon}_${year}] BCVR ${meta.label} | ${longMon} ${year} - Accounting`;
-    console.log(`🔎 [ACN] Searching Drive folder for: "${currentFileName}" (Branch: ${branchCode})`);
+  const now = new Date();
 
-    try {
-        const response = await driveApi.files.list({
-            q: `'${folderId}' in parents and name contains '${currentFileName}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
-            fields: 'files(id, name)',
-        });
+  // Target LAST month (mirrors config.js buildLastMonthRange logic)
+  const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1; // 0-indexed for MONTH_LABELS
+  const [shortMon, longMon] = MONTH_LABELS[month];
 
-        if (response.data.files.length === 0) {
-            console.error(`❌ No spreadsheet found matching "${currentFileName}" in folder.`);
-            return null;
-        }
+  const currentFileName = `BCVR [${meta.prefix}_${shortMon}_${year}] BCVR ${meta.label} | ${longMon} ${year} - Accounting`;
+  console.log(
+    `🔎 [ACN] Searching Drive folder for: "${currentFileName}" (Branch: ${branchCode})`,
+  );
 
-        const file = response.data.files[0];
-        console.log(`📂 Found active file: ${file.name} (ID: ${file.id})`);
-        return file.id;
-    } catch (err) {
-        console.error("❌ Drive Search Error:", err.message);
-        return null;
+  try {
+    const response = await driveApi.files.list({
+      q: `'${folderId}' in parents and name contains '${currentFileName}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+      fields: "files(id, name)",
+    });
+
+    if (response.data.files.length === 0) {
+      console.error(
+        `❌ No spreadsheet found matching "${currentFileName}" in folder.`,
+      );
+      return null;
     }
+
+    const file = response.data.files[0];
+    console.log(`📂 Found active file: ${file.name} (ID: ${file.id})`);
+    return file.id;
+  } catch (err) {
+    console.error("❌ Drive Search Error:", err.message);
+    return null;
+  }
 }
 
 // --- SQL QUERY REPOSITORY ---
 function buildQueries(dbName) {
-const queries = {
-    'ST: DW->DDS': `
+  const queries = {
+    "ST: DW->DDS": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'ST: DW->PHSSN': `
+    "ST: DW->PHSSN": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'ST: DW->PHSSI': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        
-        Query here ***
-        `,
-    
-    'ST: DW->IBS': `
+    "ST: DW->PHSSI": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'ST: DW->MBS': `
+    "ST: DW->IBS": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'ST: DW->SBS': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        
-        Query here ***
-        `,
-    
-    'RT: DDS->DW': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        
-        Query here ***
-        `,
-    
-    'RT: PHSSN->DW': `
+    "ST: DW->MBS": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'RT: PHSSI->DW': `
-        DECLARE @StartDate DATE = '${DATE.sql.start}';
-        DECLARE @EndDate   DATE = '${DATE.sql.end}';
-        
-        Query here ***
-        `,
-    
-    'RT: IBS->DW': `
+    "ST: DW->SBS": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'RT: MBS->DW': `
+    "RT: DDS->DW": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'RT: SBS->DW': `
+    "RT: PHSSN->DW": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
-        
 
-    'Sales Invoice - Govt.': `
+    "RT: PHSSI->DW": `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    "RT: IBS->DW": `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    "RT: MBS->DW": `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    "RT: SBS->DW": `
+        DECLARE @StartDate DATE = '${DATE.sql.start}';
+        DECLARE @EndDate   DATE = '${DATE.sql.end}';
+        
+        Query here ***
+        `,
+
+    "Sales Invoice - Govt.": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT 
@@ -164,7 +177,7 @@ const queries = {
             AND Order_Type LIKE '%Govt%'
         ORDER BY [Released Date]`,
 
-    'Sales Invoice': `
+    "Sales Invoice": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT 
@@ -180,7 +193,7 @@ const queries = {
             AND Order_Type NOT LIKE '%Govt%'
         ORDER BY [Released Date]`,
 
-    'Inv. Discrepancy': `
+    "Inv. Discrepancy": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT
@@ -217,7 +230,7 @@ const queries = {
           AND (PCD.P_Counts - PCD.Total_QTY) > 0
         ORDER BY [Date] ASC`,
 
-    'Remittance': `
+    Remittance: `
         DECLARE @SalesDate_From DATE = '${DATE.sql.start}';
         DECLARE @SalesDate_To   DATE = '${DATE.sql.end}';
         SELECT Remittance_Date, LEFT(Order_Type, 4) AS Order_Type, Total_Net, Total_Remittance,
@@ -231,7 +244,7 @@ const queries = {
         WHERE Deposit_Date BETWEEN @SalesDate_From AND @SalesDate_To
         ORDER BY Deposit_Date`,
 
-    'Remittance Deposit': `
+    "Remittance Deposit": `
         SELECT 
             CONVERT(VARCHAR(16), [deposit_date], 120) AS [Deposit Date],
             [deposit_no]     AS [Deposit No],
@@ -243,7 +256,7 @@ const queries = {
         WHERE [deposit_date] BETWEEN '${DATE.sql.start}' AND '${DATE.sql.end}'
         ORDER BY [deposit_date] ASC`,
 
-    'Opex': `
+    Opex: `
         DECLARE @Date_From DATE = '${DATE.sql.start}';
         DECLARE @Date_To   DATE = '${DATE.sql.end}';
         SELECT 
@@ -267,22 +280,21 @@ const queries = {
           AND OPEX_Category NOT LIKE '%Cost Of Goods%'
         ORDER BY [Date of Payment] ASC`,
 
-    
-    'Cost of Goods 1': `
+    "Cost of Goods 1": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'Cost of Goods 2': `
+    "Cost of Goods 2": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'OPEX Monthly': `
+    "OPEX Monthly": `
         SELECT 
             OPEX_Category,
             SUM(CASE WHEN MONTH(Date_Payment_Check) = 1  THEN Payment_Amount ELSE 0 END) AS [January],
@@ -302,57 +314,56 @@ const queries = {
           AND OPEX_Category NOT IN ('Cost Of Goods 1', 'Cost Of Goods 2')
         GROUP BY OPEX_Category`,
 
-    'Supplier Received': `
+    "Supplier Received": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'AP': `
+    AP: `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'AP - Debit (COGS1)': `
+    "AP - Debit (COGS1)": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'AP - Debit (COGS2)': `
+    "AP - Debit (COGS2)": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'AP - Overdue': `
+    "AP - Overdue": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'AP - Audit': `
+    "AP - Audit": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-    'Check Transmittal': `
+    "Check Transmittal": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-
-    'Disbursement': `
+    Disbursement: `
         DECLARE @Date_From DateTime = '${DATE.sql.datetimeStart}';
         DECLARE @Date_To   DateTime = '${DATE.sql.datetimeEnd}';
         SELECT 
@@ -387,7 +398,7 @@ const queries = {
         WHERE Voucher_date BETWEEN @Date_From AND @Date_To
         ORDER BY [Date Processed] ASC`,
 
-    'Disbursement Deposit': `
+    "Disbursement Deposit": `
         SELECT 
             CAST(FORMAT(deposit_date, 'yyyy-MM-dd HH:mm:ss') AS VARCHAR(50)) AS [Deposit Date],
             deposit_no     AS [Deposit No],
@@ -399,30 +410,28 @@ const queries = {
           AND deposit_date <  '${DATE.sql.end}'
         ORDER BY deposit_date ASC`,
 
-
-     'New Supplier': `
+    "New Supplier": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-     'Procurement Audit': `
+    "Procurement Audit": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-     'Supplier PO Audit': `
+    "Supplier PO Audit": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         
         Query here ***
         `,
 
-
-    'OPEX: SOP/Cashout': `
+    "OPEX: SOP/Cashout": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT 
@@ -441,7 +450,7 @@ const queries = {
         WHERE record_date BETWEEN @StartDate AND @EndDate
         ORDER BY record_date ASC, voucher_no ASC`,
 
-    'AR: SOP/Cashout': `
+    "AR: SOP/Cashout": `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT 
@@ -459,7 +468,7 @@ const queries = {
           AND trans_date < DATEADD(DAY, 1, @EndDate)
         ORDER BY trans_date ASC`,
 
-    'Commitment': `
+    Commitment: `
         DECLARE @StartDate DATE = '${DATE.sql.start}';
         DECLARE @EndDate   DATE = '${DATE.sql.end}';
         SELECT 
@@ -478,204 +487,235 @@ const queries = {
         WHERE O.Order_Date BETWEEN @StartDate AND @EndDate
         GROUP BY O.Order_No, O.Order_Date, O.Order_Type, O.Client_Name
         ORDER BY O.Order_Date ASC`,
-};
-return queries;
+  };
+  return queries;
 }
 
 // --- FORMATTING HELPERS ---
-const PESO_KEYS = /price|total|value|sold|amount|cost|capital|peso|cashout|sop|expense|check.amount|request.amount|released.amount|net|remittance|deposit(?!.no|.type|.status|.date)/i;
+const PESO_KEYS =
+  /price|total|value|sold|amount|cost|capital|peso|cashout|sop|expense|check.amount|request.amount|released.amount|net|remittance|deposit(?!.no|.type|.status|.date)/i;
 const DATE_KEYS = /date/i;
 
 function formatCell(key, val) {
-    if (val === null || val === undefined || val === '') return val;
-    if (DATE_KEYS.test(key) && (val instanceof Date || !isNaN(Date.parse(val)))) {
-        const d = new Date(val);
-        if (!isNaN(d.getTime())) {
-            const mm   = String(d.getMonth() + 1).padStart(2, '0');
-            const dd   = String(d.getDate()).padStart(2, '0');
-            const yyyy = d.getFullYear();
-            return `${mm}/${dd}/${yyyy}`;
-        }
+  if (val === null || val === undefined || val === "") return val;
+  if (DATE_KEYS.test(key) && (val instanceof Date || !isNaN(Date.parse(val)))) {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      return `${mm}/${dd}/${yyyy}`;
     }
-    if (PESO_KEYS.test(key)) {
-        const num = parseFloat(String(val).replace(/,/g, ''));
-        if (!isNaN(num)) return `₱${num.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    return val;
+  }
+  if (PESO_KEYS.test(key)) {
+    const num = parseFloat(String(val).replace(/,/g, ""));
+    if (!isNaN(num))
+      return `₱${num.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return val;
 }
 
 function formatRow(rowObj) {
-    return Object.entries(rowObj).map(([key, val]) => formatCell(key, val));
+  return Object.entries(rowObj).map(([key, val]) => formatCell(key, val));
 }
 
 // --- SAFE HEADER EXTRACTOR ---
 // result.recordset.columns is populated by mssql even when rows = 0.
 // Falls back to Object.keys(rows[0]) when rows exist, as a consistency check.
 function getHeaders(result) {
-    if (result.recordset.columns) {
-        const keys = Object.keys(result.recordset.columns);
-        if (keys.length > 0) return keys;
-    }
-    if (result.recordset.length > 0) {
-        return Object.keys(result.recordset[0]);
-    }
-    return [];
+  if (result.recordset.columns) {
+    const keys = Object.keys(result.recordset.columns);
+    if (keys.length > 0) return keys;
+  }
+  if (result.recordset.length > 0) {
+    return Object.keys(result.recordset[0]);
+  }
+  return [];
 }
 
 // Same but accepts a raw recordset array (multi-recordset sheets)
 function getHeadersFromRecordset(recordset) {
-    if (recordset.columns) {
-        const keys = Object.keys(recordset.columns);
-        if (keys.length > 0) return keys;
-    }
-    if (recordset.length > 0) {
-        return Object.keys(recordset[0]);
-    }
-    return [];
+  if (recordset.columns) {
+    const keys = Object.keys(recordset.columns);
+    if (keys.length > 0) return keys;
+  }
+  if (recordset.length > 0) {
+    return Object.keys(recordset[0]);
+  }
+  return [];
 }
 
 // --- SYNC FUNCTION ---
 async function syncQueryToSheet(pool, spreadsheetId, query, sheetName) {
-    try {
-        const result    = await pool.request().query(query);
-        const START_ROW = 5;
+  try {
+    const result = await pool.request().query(query);
+    const START_ROW = 5;
 
-        // ── Inv. Discrepancy: side-by-side (Negative → A5, Positive → J5) ────────
-        if (sheetName === 'Inv. Discrepancy') {
-            const sets = result.recordsets;
+    // ── Inv. Discrepancy: side-by-side (Negative → A5, Positive → J5) ────────
+    if (sheetName === "Inv. Discrepancy") {
+      const sets = result.recordsets;
 
-            await sheetsApi.spreadsheets.values.batchClear({
-                spreadsheetId,
-                requestBody: {
-                    ranges: [
-                        `'${sheetName}'!A${START_ROW}:H1000`,
-                        `'${sheetName}'!J${START_ROW}:Q1000`,
-                    ]
-                }
-            });
+      await sheetsApi.spreadsheets.values.batchClear({
+        spreadsheetId,
+        requestBody: {
+          ranges: [
+            `'${sheetName}'!A${START_ROW}:H1000`,
+            `'${sheetName}'!J${START_ROW}:Q1000`,
+          ],
+        },
+      });
 
-            const batchData = [];
+      const batchData = [];
 
-            // Left side — Negative Variance (always write header)
-            const negHeaders = getHeadersFromRecordset(sets[0]);
-            const negRows    = (sets[0] ?? []).map(r => formatRow(r));
-            if (negHeaders.length > 0) {
-                batchData.push({ range: `'${sheetName}'!A${START_ROW}`, values: [negHeaders, ...negRows] });
-            }
-
-            // Right side — Positive Variance (always write header)
-            const posHeaders = getHeadersFromRecordset(sets[1]);
-            const posRows    = (sets[1] ?? []).map(r => formatRow(r));
-            if (posHeaders.length > 0) {
-                batchData.push({ range: `'${sheetName}'!J${START_ROW}`, values: [posHeaders, ...posRows] });
-            }
-
-            if (batchData.length > 0) {
-                await sheetsApi.spreadsheets.values.batchUpdate({
-                    spreadsheetId,
-                    requestBody: { data: batchData, valueInputOption: 'USER_ENTERED' }
-                });
-            }
-            console.log(`✅ [${sheetName}] Neg: ${negRows.length}, Pos: ${posRows.length} row(s) — headers always at Row ${START_ROW}.`);
-            return;
-        }
-
-        // ── Remittance: two stacked tables, each with its own header ─────────────
-        if (sheetName === 'Remittance') {
-            const sets = result.recordsets;
-
-            await sheetsApi.spreadsheets.values.clear({
-                spreadsheetId,
-                range: `'${sheetName}'!A${START_ROW}:Z1000`,
-            });
-
-            const batchData = [];
-            let nextRow = START_ROW;
-
-            // Table 1 — always write header
-            const t1Headers = getHeadersFromRecordset(sets[0]);
-            const t1Rows    = (sets[0] ?? []).map(r => formatRow(r));
-            if (t1Headers.length > 0) {
-                batchData.push({ range: `'${sheetName}'!A${nextRow}`, values: [t1Headers, ...t1Rows] });
-                nextRow += 1 + t1Rows.length + 2; // header + data + 2-row gap
-            }
-
-            // Table 2 — always write header
-            const t2Headers = getHeadersFromRecordset(sets[1]);
-            const t2Rows    = (sets[1] ?? []).map(r => formatRow(r));
-            if (t2Headers.length > 0) {
-                batchData.push({ range: `'${sheetName}'!A${nextRow}`, values: [t2Headers, ...t2Rows] });
-            }
-
-            if (batchData.length > 0) {
-                await sheetsApi.spreadsheets.values.batchUpdate({
-                    spreadsheetId,
-                    requestBody: { data: batchData, valueInputOption: 'USER_ENTERED' }
-                });
-            }
-            console.log(`✅ [${sheetName}] T1: ${t1Rows.length}, T2: ${t2Rows.length} row(s) — headers always written.`);
-            return;
-        }
-
-        // ── All other sheets: header at A5, data from A6 ─────────────────────────
-        const rows = result.recordset;
-
-        await sheetsApi.spreadsheets.values.clear({
-            spreadsheetId,
-            range: `'${sheetName}'!A${START_ROW}:Z1000`,
+      // Left side — Negative Variance (always write header)
+      const negHeaders = getHeadersFromRecordset(sets[0]);
+      const negRows = (sets[0] ?? []).map((r) => formatRow(r));
+      if (negHeaders.length > 0) {
+        batchData.push({
+          range: `'${sheetName}'!A${START_ROW}`,
+          values: [negHeaders, ...negRows],
         });
+      }
 
-        // Headers from mssql column metadata — reliable even with 0 rows
-        const headers = getHeaders(result);
+      // Right side — Positive Variance (always write header)
+      const posHeaders = getHeadersFromRecordset(sets[1]);
+      const posRows = (sets[1] ?? []).map((r) => formatRow(r));
+      if (posHeaders.length > 0) {
+        batchData.push({
+          range: `'${sheetName}'!J${START_ROW}`,
+          values: [posHeaders, ...posRows],
+        });
+      }
 
-        if (rows && rows.length > 0) {
-            // Has data: write header + data rows
-            await sheetsApi.spreadsheets.values.update({
-                spreadsheetId,
-                range: `'${sheetName}'!A${START_ROW}`,
-                valueInputOption: 'USER_ENTERED',
-                requestBody: { values: [headers, ...rows.map(r => formatRow(r))] },
-            });
-            console.log(`✅ [${sheetName}] Synced ${rows.length} row(s) + header at Row ${START_ROW}.`);
-        } else {
-            // No data: write header row only
-            if (headers.length > 0) {
-                await sheetsApi.spreadsheets.values.update({
-                    spreadsheetId,
-                    range: `'${sheetName}'!A${START_ROW}`,
-                    valueInputOption: 'USER_ENTERED',
-                    requestBody: { values: [headers] },
-                });
-            }
-            console.warn(`⚠️  [${sheetName}] No records — header only written at Row ${START_ROW}.`);
-        }
-
-    } catch (err) {
-        console.error(`❌ [${sheetName}] Error:`, err.message);
+      if (batchData.length > 0) {
+        await sheetsApi.spreadsheets.values.batchUpdate({
+          spreadsheetId,
+          requestBody: { data: batchData, valueInputOption: "USER_ENTERED" },
+        });
+      }
+      console.log(
+        `✅ [${sheetName}] Neg: ${negRows.length}, Pos: ${posRows.length} row(s) — headers always at Row ${START_ROW}.`,
+      );
+      return;
     }
+
+    // ── Remittance: two stacked tables, each with its own header ─────────────
+    if (sheetName === "Remittance") {
+      const sets = result.recordsets;
+
+      await sheetsApi.spreadsheets.values.clear({
+        spreadsheetId,
+        range: `'${sheetName}'!A${START_ROW}:Z1000`,
+      });
+
+      const batchData = [];
+      let nextRow = START_ROW;
+
+      // Table 1 — always write header
+      const t1Headers = getHeadersFromRecordset(sets[0]);
+      const t1Rows = (sets[0] ?? []).map((r) => formatRow(r));
+      if (t1Headers.length > 0) {
+        batchData.push({
+          range: `'${sheetName}'!A${nextRow}`,
+          values: [t1Headers, ...t1Rows],
+        });
+        nextRow += 1 + t1Rows.length + 2; // header + data + 2-row gap
+      }
+
+      // Table 2 — always write header
+      const t2Headers = getHeadersFromRecordset(sets[1]);
+      const t2Rows = (sets[1] ?? []).map((r) => formatRow(r));
+      if (t2Headers.length > 0) {
+        batchData.push({
+          range: `'${sheetName}'!A${nextRow}`,
+          values: [t2Headers, ...t2Rows],
+        });
+      }
+
+      if (batchData.length > 0) {
+        await sheetsApi.spreadsheets.values.batchUpdate({
+          spreadsheetId,
+          requestBody: { data: batchData, valueInputOption: "USER_ENTERED" },
+        });
+      }
+      console.log(
+        `✅ [${sheetName}] T1: ${t1Rows.length}, T2: ${t2Rows.length} row(s) — headers always written.`,
+      );
+      return;
+    }
+
+    // ── All other sheets: header at A5, data from A6 ─────────────────────────
+    const rows = result.recordset;
+
+    await sheetsApi.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `'${sheetName}'!A${START_ROW}:Z1000`,
+    });
+
+    // Headers from mssql column metadata — reliable even with 0 rows
+    const headers = getHeaders(result);
+
+    if (rows && rows.length > 0) {
+      // Has data: write header + data rows
+      await sheetsApi.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${sheetName}'!A${START_ROW}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [headers, ...rows.map((r) => formatRow(r))] },
+      });
+      console.log(
+        `✅ [${sheetName}] Synced ${rows.length} row(s) + header at Row ${START_ROW}.`,
+      );
+    } else {
+      // No data: write header row only
+      if (headers.length > 0) {
+        await sheetsApi.spreadsheets.values.update({
+          spreadsheetId,
+          range: `'${sheetName}'!A${START_ROW}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [headers] },
+        });
+      }
+      console.warn(
+        `⚠️  [${sheetName}] No records — header only written at Row ${START_ROW}.`,
+      );
+    }
+  } catch (err) {
+    console.error(`❌ [${sheetName}] Error:`, err.message);
+  }
 }
 
 // --- MAIN EXPORT ---
 exports.run = async (pool, folderId, branchCode, dbName) => {
-    console.log(`\n📊 [ACN] Sync started at ${new Date().toLocaleString()}`);
+  console.log(`\n📊 [ACN] Sync started at ${new Date().toLocaleString()}`);
 
-    const queries = buildQueries(dbName);
-    const currentSpreadsheetId = await getSpreadsheetIdForCurrentMonth(folderId, branchCode);
+  const queries = buildQueries(dbName);
+  const currentSpreadsheetId = await getSpreadsheetIdForCurrentMonth(
+    folderId,
+    branchCode,
+  );
 
-    if (!currentSpreadsheetId) {
-        console.log('[ACN] ⚠️  Sync aborted: could not find target spreadsheet.');
-        return;
-    }
+  if (!currentSpreadsheetId) {
+    console.log("[ACN] ⚠️  Sync aborted: could not find target spreadsheet.");
+    return;
+  }
 
-    const tabNames = Object.keys(queries);
-    console.log(`📋 [ACN] Processing ${tabNames.length} tab(s)...`);
+  const tabNames = Object.keys(queries);
+  console.log(`📋 [ACN] Processing ${tabNames.length} tab(s)...`);
 
-    for (let i = 0; i < tabNames.length; i++) {
-        const tabName = tabNames[i];
-        console.log(`   ⏳ [ACN] [${i+1}/${tabNames.length}] Syncing: "${tabName}"...`);
-        await syncQueryToSheet(pool, currentSpreadsheetId, queries[tabName], tabName);
-        await sleep(3000);
-    }
+  for (let i = 0; i < tabNames.length; i++) {
+    const tabName = tabNames[i];
+    console.log(
+      `   ⏳ [ACN] [${i + 1}/${tabNames.length}] Syncing: "${tabName}"...`,
+    );
+    await syncQueryToSheet(
+      pool,
+      currentSpreadsheetId,
+      queries[tabName],
+      tabName,
+    );
+    await sleep(3000);
+  }
 
-    console.log('✨ [ACN] All tabs synced successfully.');
+  console.log("✨ [ACN] All tabs synced successfully.");
 };
