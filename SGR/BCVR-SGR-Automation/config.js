@@ -56,7 +56,7 @@ console.log(`📅 Date range resolved → ${DATE.START}  to  ${DATE.END}  (Year:
 const baseConfig = {
     user:     'intern',
     password: 'intern2026',
-    server:   '192.168.1.184',
+    server:   '192.168.1.165',
     options:  { encrypt: false, trustServerCertificate: true },
     pool:     { max: 10, min: 0, idleTimeoutMillis: 30000 },
     connectionTimeout: 15000,
